@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bgGradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#07090f;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a1e2e;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d9ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bgGradient2)"/>
+  
+  <!-- Accent bars -->
+  <rect x="0" y="0" width="1200" height="6" fill="url(#accentGradient)"/>
+  
+  <!-- Logo area -->
+  <circle cx="150" cy="315" r="80" fill="none" stroke="url(#accentGradient)" stroke-width="2"/>
+  <text x="150" y="340" font-size="100" font-weight="bold" text-anchor="middle" fill="url(#accentGradient)" font-family="system-ui, -apple-system, sans-serif">N</text>
+  
+  <!-- Title -->
+  <text x="350" y="300" font-size="72" font-weight="bold" fill="#e6edf3" font-family="system-ui, -apple-system, sans-serif">NovaByte</text>
+  <text x="350" y="380" font-size="48" fill="#8b949e" font-family="system-ui, -apple-system, sans-serif">Privacy-First OS</text>
+  
+  <!-- Bottom accent -->
+  <rect x="0" y="624" width="1200" height="6" fill="url(#accentGradient)"/>
+</svg>

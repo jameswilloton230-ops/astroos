@@ -1,0 +1,18 @@
+<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="astroos-logo-g" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a84ff"></stop>
+      <stop offset="50%" stop-color="#5e5ce6"></stop>
+      <stop offset="100%" stop-color="#bf5af2"></stop>
+    </linearGradient>
+  </defs>
+  <polygon fill="none" points="40,4 68,20 68,60 40,76 12,60 12,20" stroke="url(#astroos-logo-g)" stroke-width="3"></polygon>
+  <polygon fill="none" opacity="0.5" points="40,14 60,26 60,54 40,66 20,54 20,26" stroke="url(#astroos-logo-g)" stroke-width="1.5"></polygon>
+  <circle cx="40" cy="40" fill="url(#astroos-logo-g)" r="5.5"></circle>
+  <line stroke="url(#astroos-logo-g)" stroke-width="1.8" x1="40" x2="40" y1="4" y2="14"></line>
+  <line stroke="url(#astroos-logo-g)" stroke-width="1.8" x1="68" x2="60" y1="20" y2="26"></line>
+  <line stroke="url(#astroos-logo-g)" stroke-width="1.8" x1="68" x2="60" y1="60" y2="54"></line>
+  <line stroke="url(#astroos-logo-g)" stroke-width="1.8" x1="40" x2="40" y1="76" y2="66"></line>
+  <line stroke="url(#astroos-logo-g)" stroke-width="1.8" x1="12" x2="20" y1="60" y2="54"></line>
+  <line stroke="url(#astroos-logo-g)" stroke-width="1.8" x1="12" x2="20" y1="20" y2="26"></line>
+</svg>

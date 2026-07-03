@@ -1,0 +1,60 @@
+{
+  "name": "astro-server",
+  "version": "1.0.0",
+  "description": "Astro Server",
+  "main": "client.js",
+  "scripts": {
+    "start": "nw .",
+    "prestart": "node scripts/bootstrap.js",
+    "dev": "nw . --enable-logging=stderr --v=1",
+    "clean": "node -e \"const {exec}=require('child_process');exec(process.platform==='win32'?'taskkill /F /IM nw.exe':'pkill -x nw; pkill -x nwjs; exit 0',()=>console.log('\\u2714 Cleared.'))\""
+  },
+  "window": {
+    "title": "AstroOS",
+    "width": 1280,
+    "height": 720,
+    "min_width": 800,
+    "min_height": 500,
+    "frame": true,
+    "icon": "assets/icon.png",
+    "icons": {
+      "128": "assets/icon.png"
+    },
+    "dev_tools": true,
+    "chromium-args": "--no-first-run --disable-features=Vulkan --disable-zero-copy --js-flags=\"--expose-gc --initial-heap-size=512\" --enable-gpu-rasterization --enable-oop-rasterization --ignore-gpu-blocklist --disable-background-timer-throttling --disable-renderer-backgrounding --user-data-dir=./nwjs-data"
+  },
+  "node-remote": "https://localhost:*",
+  "keywords": [
+    "Server"
+  ],
+  "author": "jameswilloton230-ops",
+  "license": "MIT",
+  "dependencies": {
+    "@noble/ciphers": "^2.2.0",
+    "@peculiar/x509": "^2.0.0",
+    "better-sqlite3": "^12.11.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dompurify": "^3.4.11",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "express-session": "^1.19.0",
+    "helmet": "^8.2.0",
+    "imapflow": "^1.4.2",
+    "node-pop3": "^0.11.0",
+    "nodemailer": "^9.0.1",
+    "postal-mime": "^2.7.5",
+    "reflect-metadata": "^0.2.2",
+    "better-sqlite3-session-store": "^0.1.0",
+    "tar": "^7.5.17",
+    "uuid": "^14.0.1"
+  },
+  "devDependencies": {
+    "nw": "^0.112.0-sdk"
+  },
+  "allowScripts": {
+    "nw@0.112.0-sdk": true,
+    "better-sqlite3@12.11.1": true
+  }
+}

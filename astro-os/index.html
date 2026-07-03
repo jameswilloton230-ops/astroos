@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0, user-scalable=no" name="viewport"/>
+  <meta content="nosniff" http-equiv="X-Content-Type-Options"/>
+  <meta content="strict-origin-when-cross-origin" http-equiv="Referrer-Policy"/>
+  <meta content="camera=(), microphone=(), geolocation=(), payment=(), usb=()" http-equiv="Permissions-Policy"/>
+  <title>
+   AstroOS
+  </title>
+  <meta content="AstroOS — open source browser-based operating system." name="description"/>
+  <meta content="noindex,nofollow" name="robots"/>
+  <meta content="#07090f" name="theme-color"/>
+  <link href="/" rel="canonical"/>
+  <link href="/assets/apple-touch-icon.svg" rel="apple-touch-icon"/>
+  <!-- Open Graph -->
+  <meta content="NovaByte" property="og:title"/>
+  <meta content="NovaByte — open source browser-based operating system." property="og:description"/>
+  <meta content="/assets/og-image.svg" property="og:image"/>
+  <meta content="website" property="og:type"/>
+  <!-- Twitter Card -->
+  <meta content="summary_large_image" name="twitter:card"/>
+  <meta content="NovaByte" name="twitter:title"/>
+  <meta content="NovaByte — open source browser-based operating system." name="twitter:description"/>
+  <!-- Global localStorage polyfill for sandboxed contexts -->
+  <!-- SRI-verified preloads for pdf.js — browser validates hashes before import runs -->
+  <link crossorigin="anonymous" href="https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.mjs" rel="modulepreload"/>
+  <link crossorigin="anonymous" href="https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.worker.mjs" rel="modulepreload"/>
+  <!-- lucide icons are inline SVG; no external CSS needed -->
+  <link href="style.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+ </head>
+ <body>
+  <!-- Recovery Mode Screen v2 -->
+  <div aria-label="NovaByte Recovery Mode" id="recovery-screen" role="dialog">
+   <!-- Top bar -->
+   <div class="recovery-topbar">
+    <div class="recovery-topbar-left">
+     <svg class="recovery-topbar-logo" viewbox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <polygon fill="none" points="16,2 30,9 30,23 16,30 2,23 2,9" stroke="#ff6b35" stroke-width="1.5">
+      </polygon>
+      <polygon fill="none" opacity="0.5" points="16,7 25,11.5 25,20.5 16,25 7,20.5 7,11.5" stroke="#ffd700" stroke-width="0.8">
+      </polygon>
+      <text fill="#ffd700" font-family="system-ui" font-size="9" font-weight="700" text-anchor="middle" x="16" y="19.5">
+       NB
+      </text>
+     </svg>
+     <div class="recovery-topbar-title">
+      NovaByte Recovery Environment
+     </div>
+     <div class="recovery-topbar-badge">
+      Recovery Mode
+     </div>
+    </div>
+    <div class="recovery-topbar-right">
+     <span>
+      Build:
+      <strong>
+       NovaByte 1.0
+      </strong>
+     </span>
+     <span>
+      Recovery:
+      <strong style="color:#ff6b35">
+       v2.0
+      </strong>
+     </span>
+     <div id="rec-clock">
+      --:--:--
+     </div>
+    </div>
+   </div>
+   <!-- Alert banner -->
+   <div class="recovery-alert">
+    <div class="recovery-alert-icon">
+     ⚠
+    </div>
+    <div class="recovery-alert-text">
+     <strong id="rec-attempt-count">
+      2
+     </strong>
+     failed boot attempt(s) detected —
+        NovaByte could not start normally. Select a recovery option or wait for auto-boot.
+     <span id="rec-timestamp" style="margin-left:10px;opacity:0.55">
+     </span>
+    </div>
+   </div>
+   <!-- Tab bar -->
+   <div class="recovery-tabs">
+    <button class="recovery-tab active" data-switchtab="troubleshoot" data-tab="troubleshoot">
+     ▶ Troubleshoot
+    </button>
+    <button class="recovery-tab" data-switchtab="advanced" data-tab="advanced">
+     ⚙ Advanced
+    </button>
+    <button class="recovery-tab" data-switchtab="data" data-tab="data">
+     💾 Data
+    </button>
+    <button class="recovery-tab danger-tab" data-switchtab="danger" data-tab="danger">
+     ⚠ Danger Zone
+    </button>
+   </div>
+   <!-- Main body -->
+   <div class="recovery-body">
+    <!-- Left: option panels -->
+    <div class="recovery-left">
+     <!-- Troubleshoot tab -->
+     <div class="recovery-tab-panel active" id="tab-troubleshoot">
+      <div class="recovery-section-label">
+       Quick Actions
+      </div>
+      <div class="recovery-options">
+       <button class="recovery-option primary" data-action="continue">
+        <div class="recovery-option-icon">
+         ▶
+        </div>
+        <div class="recovery-option-content">
+         <div class="recovery-option-label">
+          Continue to NovaByte
+         </div>
+         <div class="recovery-option-desc">
+          Attempt normal boot and clear failure counter
+         </div>
+        </div>
+        <div class="recovery-option-arrow">
+         ›
+        </div>
+       </button>
+       <button class="recovery-option" data-action="safemode">
+        <div class="recovery-option-icon">
+         🛡
+        </div>
+        <div class="recovery-option-content">
+         <div class="recovery-option-label">
+          Boot in Safe Mode
+         </div>
+         <div class="recovery-option-desc">
+          Minimal boot — defaults applied
+         </div>
+        </div>
+        <div class="recovery-option-arrow">
+         ›
+        </div>
+       </button>
+      </div>
+     </div>
+     <!-- Advanced tab -->
+     <div class="recovery-tab-panel" id="tab-advanced">
+      <div class="recovery-section-label">
+       Tools
+      </div>
+      <div class="recovery-options">
+       <button class="recovery-option" data-recnav="tools">
+        <div class="recovery-option-icon">
+         💻
+        </div>
+        <div class="recovery-option-content">
+         <div class="recovery-option-label">
+          Terminal
+         </div>
+         <div class="recovery-option-desc">
+          Open recovery terminal
+         </div>
+        </div>
+        <div class="recovery-option-arrow">
+         ›
+        </div>
+       </button>
+       <button class="recovery-option" data-action="clear-cache">
+        <div class="recovery-option-icon">
+         🧹
+        </div>
+        <div class="recovery-option-content">
+         <div class="recovery-option-label">
+          Clear Cache &amp; Temp Data
+         </div>
+         <div class="recovery-option-desc">
+          Flush session storage, SW caches, and temp localStorage entries
+         </div>
+        </div>
+        <div class="recovery-option-arrow">
+         ›
+        </div>
+       </button>
+      </div>
+     </div>
+     <!-- Data tab -->
+     <div class="recovery-tab-panel" id="tab-data">
+      <div class="recovery-section-label">
+       Backup &amp; Restore
+      </div>
+      <div class="recovery-options">
+       <button class="recovery-option" data-action="export">
+        <div class="recovery-option-icon">
+         💾
+        </div>
+        <div class="recovery-option-content">
+         <div class="recovery-option-label">
+          Export System Backup
+         </div>
+         <div class="recovery-option-desc">
+          Download all settings and data as .json
+         </div>
+        </div>
+        <div class="recovery-option-arrow">
+         ›
+        </div>
+       </button>
+       <button class="recovery-option" data-action="import">
+        <div class="recovery-option-icon">
+         📂
+        </div>
+        <div class="recovery-option-content">
+         <div class="recovery-option-label">
+          Import Backup
+         </div>
+         <div class="recovery-option-desc">
+          Restore settings from a previously exported backup file
+         </div>
+        </div>
+        <div class="recovery-option-arrow">
+         ›
+        </div>
+       </button>
+      </div>
+      <div class="recovery-section-label">
+       Storage Explorer
+      </div>
+      <div class="recovery-options">
+       <button class="recovery-option" data-recnav="file-manager">
+        <div class="recovery-option-icon">
+         📁
+        </div>
+        <div class="recovery-option-content">
+         <div class="recovery-option-label">
+          File Manager
+         </div>
+         <div class="recovery-option-desc">
+          Browse localStorage keys
+         </div>
+        </div>
+        <div class="recovery-option-arrow">
+         ›
+        </div>
+       </button>
+       <button class="recovery-option" data-recnav="settings-editor">
+        <div class="recovery-option-icon">
+         ⚙️
+        </div>
+        <div class="recovery-option-content">
+         <div class="recovery-option-label">
+          Settings Editor
+         </div>
+         <div class="recovery-option-desc">
+          Edit nova_settings JSON
+         </div>
+        </div>
+        <div class="recovery-option-arrow">
+         ›
+        </div>
+       </button>
+       <button class="recovery-option" data-recnav="storage-analyzer">
+        <div class="recovery-option-icon">
+         📊
+        </div>
+        <div class="recovery-option-content">
+         <div class="recovery-option-label">
+          Storage Analyzer
+         </div>
+         <div class="recovery-option-desc">
+          Storage usage by key
+         </div>
+        </div>
+        <div class="recovery-option-arrow">
+         ›
+        </div>
+       </button>
+       <button class="recovery-option" data-recnav="event-log">
+        <div class="recovery-option-icon">
+         📜
+        </div>
+        <div class="recovery-option-content">
+         <div class="recovery-option-label">
+          Event Log
+         </div>
+         <div class="recovery-option-desc">
+          Boot attempt history
+         </div>
+        </div>
+        <div class="recovery-option-arrow">
+         ›
+        </div>
+       </button>
+      </div>
+     </div>
+     <!-- Danger zone tab -->
+     <div class="recovery-tab-panel" id="tab-danger">
+      <div class="recovery-section-label">
+       ⚠ Irreversible Actions
+      </div>
+      <div class="recovery-options">
+       <button class="recovery-option" data-action="reset-settings">
+        <div class="recovery-option-icon">
+         ⚙️
+        </div>
+        <div class="recovery-option-content">
+         <div class="recovery-option-label">
+          Reset Settings
+         </div>
+         <div class="recovery-option-desc">
+          Clears all preferences and saved state. Files are preserved.
+         </div>
+        </div>
+        <div class="recovery-option-arrow">
+         ›
+        </div>
+       </button>
+       <button class="recovery-option danger" data-action="factory">
+        <div class="recovery-option-icon">
+         🗑
+        </div>
+        <div class="recovery-option-content">
+         <div class="recovery-option-label">
+          Factory Reset
+         </div>
+         <div class="recovery-option-desc">
+          Wipes ALL data, files, settings, and IndexedDB. Cannot be undone.
+         </div>
+        </div>
+        <div class="recovery-option-arrow">
+         ›
+        </div>
+       </button>
+      </div>
+     </div>
+     <!-- Countdown (pinned to bottom of left panel) -->
+     <div style="flex:1;min-height:16px">
+     </div>
+     <div class="recovery-countdown" id="rec-countdown-block">
+      <div class="recovery-countdown-label">
+       Auto-Boot
+      </div>
+      <div class="recovery-countdown-bar-wrap">
+       <div class="recovery-countdown-bar" id="rec-cdown-bar" style="width:100%">
+       </div>
+      </div>
+      <div class="recovery-countdown-text">
+       Continuing in
+       <strong id="rec-cdown-num">
+        15
+       </strong>
+       s — interact to
+            cancel
+      </div>
+     </div>
+    </div>
+    <!-- Right: sysinfo + live log -->
+    <div class="recovery-right">
+     <div class="recovery-sysinfo">
+      <div class="recovery-sysinfo-item">
+       <div class="recovery-sysinfo-label">
+        Storage Used
+       </div>
+       <div class="recovery-sysinfo-value" id="rec-si-storage">
+        —
+       </div>
+      </div>
+      <div class="recovery-sysinfo-item">
+       <div class="recovery-sysinfo-label">
+        Settings
+       </div>
+       <div class="recovery-sysinfo-value" id="rec-si-settings">
+        —
+       </div>
+      </div>
+      <div class="recovery-sysinfo-item">
+       <div class="recovery-sysinfo-label">
+        Boot Attempts
+       </div>
+       <div class="recovery-sysinfo-value" id="rec-si-boots">
+        —
+       </div>
+      </div>
+     </div>
+     <div class="recovery-log" id="rec-diag-log">
+      <div class="recovery-log-header">
+       <div class="recovery-log-title">
+        ▸ System Log
+       </div>
+       <button class="recovery-log-clear" onclick="document.getElementById('rec-diag-lines').innerHTML=''">
+        Clear
+       </button>
+      </div>
+      <div id="rec-diag-lines">
+      </div>
+     </div>
+     <div class="recovery-console-wrap" id="rec-console-wrap" style="display:none">
+      <div class="recovery-console-prompt">
+       nova:recovery $
+      </div>
+      <input autocomplete="off" class="recovery-console-input" id="rec-console-input" placeholder="type a command… (help for list)" spellcheck="false" type="text"/>
+     </div>
+    </div>
+    <!-- File Manager Page -->
+    <div class="recovery-page" data-page="file-manager" style="display:none">
+     <div class="recovery-page-header">
+      <div class="recovery-breadcrumb">
+       <span class="rec-breadcrumb-item" data-recnav="home" role="button" tabindex="0">
+        Home
+       </span>
+       <span class="rec-breadcrumb-sep">
+        /
+       </span>
+       <span class="rec-breadcrumb-item">
+        File Manager
+       </span>
+      </div>
+     </div>
+     <div class="recovery-page-content" id="rec-fm-content">
+     </div>
+    </div>
+    <!-- Settings Editor Page -->
+    <div class="recovery-page" data-page="settings-editor" style="display:none">
+     <div class="recovery-page-header">
+      <div class="recovery-breadcrumb">
+       <span class="rec-breadcrumb-item" data-recnav="home" role="button" tabindex="0">
+        Home
+       </span>
+       <span class="rec-breadcrumb-sep">
+        /
+       </span>
+       <span class="rec-breadcrumb-item">
+        Settings Editor
+       </span>
+      </div>
+      <button class="rec-btn primary" data-fn="_settingsSave" style="margin-left:auto">
+       Save
+      </button>
+     </div>
+     <div class="recovery-page-content">
+      <textarea class="rec-settings-textarea" id="rec-settings-textarea" placeholder="Settings JSON..."></textarea>
+     </div>
+    </div>
+    <!-- Storage Analyzer Page -->
+    <div class="recovery-page" data-page="storage-analyzer" style="display:none">
+     <div class="recovery-page-header">
+      <div class="recovery-breadcrumb">
+       <span class="rec-breadcrumb-item" data-recnav="home" role="button" tabindex="0">
+        Home
+       </span>
+       <span class="rec-breadcrumb-sep">
+        /
+       </span>
+       <span class="rec-breadcrumb-item">
+        Storage Analyzer
+       </span>
+      </div>
+     </div>
+     <div class="recovery-page-content" id="rec-sa-content">
+     </div>
+    </div>
+    <!-- Tools/Terminal Page -->
+    <div class="recovery-page" data-page="tools" style="display:none">
+     <div class="recovery-page-header">
+      <div class="recovery-breadcrumb">
+       <span class="rec-breadcrumb-item" data-recnav="home" role="button" tabindex="0">
+        Home
+       </span>
+       <span class="rec-breadcrumb-sep">
+        /
+       </span>
+       <span class="rec-breadcrumb-item">
+        Terminal
+       </span>
+      </div>
+     </div>
+     <div class="recovery-page-content rec-term-content">
+      <div class="rec-term-output" id="rec-term-lines">
+      </div>
+      <div class="rec-term-input-wrap">
+       <span class="rec-term-prompt">
+        nova:recovery $
+       </span>
+       <input autocomplete="off" class="rec-term-input" id="rec-term-cmd-input" placeholder="type command... (help for list)" spellcheck="false" type="text"/>
+      </div>
+     </div>
+    </div>
+    <!-- Event Log Page -->
+    <div class="recovery-page" data-page="event-log" style="display:none">
+     <div class="recovery-page-header">
+      <div class="recovery-breadcrumb">
+       <span class="rec-breadcrumb-item" data-recnav="home" role="button" tabindex="0">
+        Home
+       </span>
+       <span class="rec-breadcrumb-sep">
+        /
+       </span>
+       <span class="rec-breadcrumb-item">
+        Event Log
+       </span>
+      </div>
+     </div>
+     <div class="recovery-page-content" id="rec-eventlog-content">
+     </div>
+    </div>
+   </div>
+   <!-- Footer -->
+   <div class="recovery-footer">
+    <div class="recovery-footer-keys">
+     <div class="recovery-footer-key">
+      <span class="recovery-key-badge">
+       Tab
+      </span>
+      <span style="color:#4a5868">
+       Switch
+            panel
+      </span>
+     </div>
+     <div class="recovery-footer-key">
+      <span class="recovery-key-badge">
+       ↑↓
+      </span>
+      <span style="color:#4a5868">
+       Navigate
+      </span>
+     </div>
+     <div class="recovery-footer-key">
+      <span class="recovery-key-badge">
+       Enter
+      </span>
+      <span style="color:#4a5868">
+       Select
+      </span>
+     </div>
+     <div class="recovery-footer-key">
+      <span class="recovery-key-badge">
+       Esc
+      </span>
+      <span style="color:#4a5868">
+       Cancel
+      </span>
+     </div>
+    </div>
+    <span id="rec-footer-time" style="color:#5a6878">
+    </span>
+    <span style="color:#222">
+     NovaByte Recovery Environment v2.0
+    </span>
+   </div>
+  </div>
+  <div id="safe-mode-banner">
+   ⚠ SAFE MODE · Default settings active
+  </div>
+  <!-- Boot Screen -->
+  <div aria-label="NovaByte is loading" id="boot-screen" role="alert">
+   <div class="boot-logo">
+    NOVABYTE
+   </div>
+   <div class="boot-hex-spinner">
+   </div>
+  </div>
+  <!-- Lock Screen -->
+  <div aria-label="Lock screen" aria-modal="true" id="lock-screen" role="dialog">
+   <div aria-hidden="true" class="lock-avatar">
+    U
+   </div>
+   <div class="lock-username" id="lock-username">
+    user
+   </div>
+   <div class="lock-pin-input" id="lock-pin-dots">
+   </div>
+   <div aria-live="assertive" class="lock-status" id="lock-status">
+   </div>
+   <div aria-label="PIN entry" class="lock-numpad" id="lock-numpad" role="group">
+   </div>
+  </div>
+  <!-- Wallpaper -->
+  <div aria-hidden="true" id="wallpaper">
+  </div>
+  <!-- Desktop -->
+  <div aria-label="Desktop" id="desktop" role="application">
+  </div>
+  <!-- Selection Rectangle -->
+  <div aria-hidden="true" id="selection-rect">
+  </div>
+  <!-- Snap Preview -->
+  <div aria-hidden="true" id="snap-preview">
+  </div>
+  <!-- Window Container -->
+  <div aria-label="Application windows" id="windows">
+  </div>
+  <!-- Taskbar -->
+  <div aria-label="Taskbar" id="taskbar" role="toolbar">
+   <div class="taskbar-pill-divider" style="width:1px;height:24px;background:rgba(255,255,255,0.10);flex-shrink:0;order:15;margin:0 2px;">
+   </div>
+   <div class="taskbar-start">
+    <button aria-label="Open Launchpad" class="taskbar-start-btn" id="start-btn">
+     <svg height="26" viewbox="0 0 80 80" width="26" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+       <lineargradient id="tb-g" x1="0%" x2="100%" y1="0%" y2="100%">
+        <stop offset="0%" stop-color="#0a84ff">
+        </stop>
+        <stop offset="50%" stop-color="#5e5ce6">
+        </stop>
+        <stop offset="100%" stop-color="#bf5af2">
+        </stop>
+       </lineargradient>
+      </defs>
+      <polygon fill="none" points="40,4 68,20 68,60 40,76 12,60 12,20" stroke="url(#tb-g)" stroke-width="3">
+      </polygon>
+      <polygon fill="none" opacity="0.5" points="40,14 60,26 60,54 40,66 20,54 20,26" stroke="url(#tb-g)" stroke-width="1.5">
+      </polygon>
+      <circle cx="40" cy="40" fill="url(#tb-g)" r="5.5">
+      </circle>
+      <line stroke="url(#tb-g)" stroke-width="1.8" x1="40" x2="40" y1="4" y2="14">
+      </line>
+      <line stroke="url(#tb-g)" stroke-width="1.8" x1="68" x2="60" y1="20" y2="26">
+      </line>
+      <line stroke="url(#tb-g)" stroke-width="1.8" x1="68" x2="60" y1="60" y2="54">
+      </line>
+      <line stroke="url(#tb-g)" stroke-width="1.8" x1="40" x2="40" y1="76" y2="66">
+      </line>
+      <line stroke="url(#tb-g)" stroke-width="1.8" x1="12" x2="20" y1="60" y2="54">
+      </line>
+      <line stroke="url(#tb-g)" stroke-width="1.8" x1="12" x2="20" y1="20" y2="26">
+      </line>
+     </svg>
+    </button>
+   </div>
+   <div aria-label="Running applications" class="taskbar-apps" id="taskbar-apps" role="group">
+   </div>
+   <div class="taskbar-pill-divider" style="width:1px;height:24px;background:rgba(255,255,255,0.10);flex-shrink:0;order:25;margin:0 2px;">
+   </div>
+   <div aria-label="System tray" class="taskbar-tray" role="group">
+    <button aria-label="Volume" class="tray-btn" id="tray-volume">
+     <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="16">
+      <path d="M11 5L6 9H2v6h4l5 4V5z">
+      </path>
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07">
+      </path>
+     </svg>
+    </button>
+    <button aria-label="Network status" class="tray-btn" id="tray-wifi">
+     <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="16">
+      <path d="M5 12.55a11 11 0 0 1 14.08 0">
+      </path>
+      <path d="M1.42 9a16 16 0 0 1 21.16 0">
+      </path>
+      <path d="M8.53 16.11a6 6 0 0 1 6.95 0">
+      </path>
+      <circle cx="12" cy="20" r="1">
+      </circle>
+     </svg>
+    </button>
+    <button aria-label="Battery status" class="tray-btn" id="tray-battery">
+     <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="16">
+      <rect height="12" rx="2" width="18" x="1" y="6">
+      </rect>
+      <line x1="23" x2="23" y1="10" y2="14">
+      </line>
+     </svg>
+    </button>
+    <button aria-label="Notifications" class="tray-btn" id="tray-bell">
+     <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="16">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9">
+      </path>
+      <path d="M13.73 21a2 2 0 0 1-3.46 0">
+      </path>
+     </svg>
+     <span class="tray-badge hidden" id="notif-badge">
+      0
+     </span>
+    </button>
+    <button aria-expanded="false" aria-haspopup="true" aria-label="User menu" class="tray-btn" id="tray-user">
+     <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="16">
+      <circle cx="12" cy="8" r="4">
+      </circle>
+      <path d="M4 20c0-4 4-6 4-6s2-2 4-2 4 2 4 6 4 6-4 6-4-2-4-2-2 2-4 2S4 20 4 20z">
+      </path>
+     </svg>
+    </button>
+    <div aria-label="User actions" class="tray-menu" id="user-menu" role="menu">
+     <div class="tray-menu-item" data-action="lock" role="menuitem" tabindex="0">
+      <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="14">
+       <rect height="11" rx="2" width="18" x="3" y="11">
+       </rect>
+       <path d="M7 11V7a5 5 0 0 1 10 0v4">
+       </path>
+      </svg>
+      <span>
+       Lock
+      </span>
+     </div>
+     <div class="tray-menu-item" data-action="logout" role="menuitem" tabindex="0">
+      <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="14">
+       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4">
+       </path>
+       <polyline points="16 17 21 12 16 7">
+       </polyline>
+       <line x1="21" x2="9" y1="12" y2="12">
+       </line>
+      </svg>
+      <span>
+       Log Off
+      </span>
+     </div>
+     <div class="tray-menu-separator">
+     </div>
+     <div class="tray-menu-item" data-action="restart" role="menuitem" tabindex="0">
+      <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="14">
+       <polyline points="23 4 23 10 17 10">
+       </polyline>
+       <path d="M20.49 15a9 9 0 0 1-10.62 6">
+       </path>
+      </svg>
+      <span>
+       Restart
+      </span>
+     </div>
+     <div class="tray-menu-item danger" data-action="shutdown" role="menuitem" tabindex="0">
+      <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="14">
+       <path d="M18.36 6.64a9 9 0 1 1-12.73 0">
+       </path>
+       <line x1="12" x2="12" y1="2" y2="12">
+       </line>
+      </svg>
+      <span>
+       Shut Down
+      </span>
+     </div>
+    </div>
+    <div aria-label="Clock" class="tray-clock" id="tray-clock" role="timer">
+     <div class="tray-time" id="tray-time">
+     </div>
+     <div class="tray-date" id="tray-date">
+     </div>
+    </div>
+   </div>
+  </div>
+  <!-- Volume Popup -->
+  <div aria-label="Volume control" class="volume-popup" id="volume-popup" role="dialog">
+   <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">
+    Volume
+   </div>
+   <input aria-label="Volume level" class="volume-slider" id="volume-slider" max="100" min="0" type="range" value="80"/>
+   <div id="volume-value" style="font-size:11px;color:var(--text-muted);margin-top:6px;text-align:center;">
+    80%
+   </div>
+  </div>
+  <!-- Notification Panel -->
+  <div aria-label="Notifications" id="notification-panel" role="complementary">
+   <div class="notif-header">
+    <h3>
+     Notifications
+    </h3>
+    <button aria-label="Close notifications" class="btn btn-sm notif-close" id="notif-close">
+     ×
+    </button>
+    <button aria-label="Mark all as read" class="btn btn-sm" id="notif-mark-all">
+     Clear All
+    </button>
+   </div>
+   <div aria-live="polite" class="notif-list" id="notif-list">
+   </div>
+  </div>
+  <!-- Launchpad -->
+  <div aria-label="Application launcher" aria-modal="true" id="launchpad" role="dialog">
+   <input aria-label="Search applications" class="launchpad-search" id="launchpad-search" placeholder="Search apps..." type="text"/>
+   <div class="launchpad-grid" id="launchpad-grid" role="grid">
+   </div>
+  </div>
+  <!-- App Switcher -->
+  <div aria-label="Application switcher" aria-modal="true" id="app-switcher" role="dialog">
+   <div class="app-switcher-list" id="app-switcher-list" role="listbox">
+   </div>
+  </div>
+  <!-- Toast Container -->
+  <div aria-live="polite" class="toast-container" id="toast-container" role="log">
+  </div>
+  <!-- Performance & Efficiency Optimization Modules -->
+  <!-- Performance Configuration (must load first) -->
+  <!-- NW.js Frame Security (must load early, before app sandbox) -->
+  <script src="/js/platform/security/frame-security.js">
+  </script>
+  <!-- App Registry and Permission Manager (must load before app sandbox) -->
+
+  <!-- App Sandbox with Frame Security Validation -->
+  <script src="/js/platform/security/app-sandbox.js">
+  </script>
+  <!-- IndexedDB Manager for large app data storage -->
+  <!-- Memory Manager for app unload on inactivity and garbage collection -->
+  <!-- Shared Worker Pool for background tasks and parallel processing -->
+  <!-- GPU Acceleration Module for WebGL, Canvas optimization, and ANGLE support -->
+  <!-- Liquid Glass SVG filter — the real Apple-style glass distortion -->
+  <svg id="lg-svg-filters" role="presentation" style="display:none" xmlns="http://www.w3.org/2000/svg">
+   <!--
+    glass-distortion: stronger refraction for large standalone glass elements.
+    x/y/width/height expanded well beyond bounds (-10%/-10%/120%/120%) so the
+    displacement map has room to warp without pulling transparent/black pixels
+    from outside the element — that's what causes the edge pixelation.
+   -->
+   <filter filterunits="objectBoundingBox" height="120%" id="glass-distortion" width="120%" x="-10%" y="-10%">
+    <feturbulence basefrequency="0.65 0.75" numoctaves="3" result="turbulence" seed="17" type="fractalNoise">
+    </feturbulence>
+    <fegaussianblur in="turbulence" result="softMap" stddeviation="2">
+    </fegaussianblur>
+    <fedisplacementmap in="SourceGraphic" in2="softMap" scale="12" xchannelselector="R" ychannelselector="G">
+    </fedisplacementmap>
+   </filter>
+   <!--
+    glass-distortion-soft: subtle edge refraction used on windows & taskbar.
+    Very gentle displacement (scale=6) — enough to see the lens warp without
+    creating visible artifacts. Expanded filter region prevents edge clipping.
+   -->
+   <filter filterunits="objectBoundingBox" height="116%" id="glass-distortion-soft" width="116%" x="-8%" y="-8%">
+    <feturbulence basefrequency="0.65 0.75" numoctaves="3" result="turbulence" seed="17" type="fractalNoise">
+    </feturbulence>
+    <fegaussianblur in="turbulence" result="softMap" stddeviation="2">
+    </fegaussianblur>
+    <fedisplacementmap in="SourceGraphic" in2="softMap" scale="6" xchannelselector="R" ychannelselector="G">
+    </fedisplacementmap>
+   </filter>
+  </svg>
+  <!-- Security: DOMPurify for HTML sanitization -->
+  <script src="/js/purify.min.js"></script>
+  <script src="ui-init.js">
+  </script>
+
+  <script src="js/core/core/init.js"></script>
+  <script src="js/core/utils/base-utils.js"></script>
+  <script src="js/core/services/workers.js"></script>
+  <script src="js/core/core/kernel.js"></script>
+  <script src="js/core/services/fs.js"></script>
+
+
+  <script src="js/core/ui/wm.js"></script>
+  <script src="js/core/services/notifications.js"></script>
+  <script src="js/core/ui/menu.js"></script>
+  <script src="js/core/ui/modals.js"></script>
+
+
+  <script src="js/core/services/registry.js"></script>
+  <script src="js/platform/core/nova-app-package-store.js"></script>
+  <script src="js/apps/files.js"></script>
+  <script src="js/apps/textedit.js"></script>
+  <script src="js/apps/terminal.js"></script>
+  <script src="js/apps/browser.js"></script>
+  <script src="js/apps/calendar.js"></script>
+  <script src="js/apps/settings.js"></script>
+  <script src="js/apps/calculator.js"></script>
+  <script src="js/apps/appmanager.js"></script>
+  <script src="js/apps/clock.js"></script>
+  <script src="/js/platform/core/app-registry.js"></script>
+  <script src="/js/platform/security/app-permission-manager.js"></script>
+  <script src="/js/platform/security/app-permissions-bootstrap.js"></script>
+  <script src="js/core/ui/desktop.js"></script>
+  <script src="js/core/core/boot.js"></script>
+  <script src="js/core/events/system-events.js"></script>
+  <script src="js/apps/email.js"></script>
+  <script src="js/apps/gallery.js"></script>
+  <script src="js/apps/downloads.js"></script>
+  <script src="js/apps/contacts.js"></script>
+  <script src="js/apps/search.js"></script>
+   <script src="js/apps/music.js"></script>
+  </body>
+</html>
