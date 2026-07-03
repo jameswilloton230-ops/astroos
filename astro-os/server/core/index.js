@@ -14,7 +14,7 @@ const { configureSSL } = require('./ssl');
 const { setupMiddleware } = require('../middleware');
 const { mountRoutes } = require('../routes');
 const { setupFaviconRoutes } = require('../favicons');
-const { setupSuggestProxy, setupEmailImageProxy, setupFrameCheckProxy } = require('../proxies');
+const { setupSuggestProxy, setupEmailImageProxy, setupFrameCheckProxy, setupAppNetworkProxy } = require('../proxies');
 
 // Global error handlers
 process.on('uncaughtException', (error) => {
@@ -86,6 +86,7 @@ setupFaviconRoutes(app);
 setupSuggestProxy(app);
 setupEmailImageProxy(app);
 setupFrameCheckProxy(app);
+setupAppNetworkProxy(app);
 
 // 5. Manifest and version endpoints
 app.get('/manifest.json', (req, res) => {
@@ -295,18 +296,14 @@ app.get('/api/apps/serve/:sandboxId/{*file}', (req, res) => { // <-- Valid stabl
   res.setHeader('Content-Type', MIME[ext] || 'application/octet-stream');
   res.setHeader('Cache-Control', 'no-store');
   let body = Buffer.from(fileData, 'base64');
-  if (isHtml) {
-    let html = body.toString('utf8');
-    if (!html.includes('__novaPrivateStore')) {
-      const origin = req.get('origin') || req.protocol + '://' + req.get('host');
-      html = html.replace(/<head(\s[^>]*)?>/i, function(m) {
-        return m + '\n' +
-          '<meta http-equiv="Content-Security-Policy" content="default-src \'self\' blob: data: \'unsafe-inline\' \'unsafe-eval\'; script-src \'self\' blob: \'unsafe-inline\' \'unsafe-eval\'; style-src \'self\' \'unsafe-inline\' blob: data:; img-src \'self\' blob: data: https:; font-src \'self\' blob: data:; connect-src \'self\' http://localhost:* https://localhost:*">\n' +
-          '<script>(function(){var o="' + origin.replace(/"/g,'%22') + '";window.nova={ipc:function(t,e){var r=new Promise(function(r,s){var a="s"+Math.random().toString(36).slice(2)+Date.now().toString(36),n=setTimeout(function(){p.has(a)&&(p.delete(a),s(TypeError("timeout "+t)))},3e4);p.set(a,{resolve:r,reject:s,timer:n}),window.parent.postMessage({type:t,requestId:a,payload:e||{}},o)});return r}};var p=new Map;window.addEventListener("message",function(t){if(t.origin!==o)return;var e=t.data;if(!e||!e.requestId)return;if(e.type==="nova:ready:response"&&e.result){var r=e.result.permissions||[];try{window.allowedPermissions=r,window.__novaPermResponse=e.result}catch(t){}}var s=p.get(e.requestId);if(!s)return;clearTimeout(s.timer),p.delete(e.requestId),e.error?s.reject(TypeError(e.error.message||String(e.error))):s.resolve(e.result)});window.__novaPrivateStore={}})<\/script>\n';
-      });
-    }
-    body = Buffer.from(html, 'utf8');
-  }
+  // Note: app-sandbox.js's loadAppContent() already injects the full capability
+  // shim (window.nova.ipc, window.fetch override, XHR shim, permission bridge)
+  // into entry HTML client-side before calling /api/apps/serve/register. This
+  // route used to also inject its own separate, minified shim here as a second
+  // safety net — but its dedup check looked for a marker the real shim never
+  // writes, so it always fired, double-injecting two competing window.nova
+  // implementations and producing malformed <script><script> markup. Removed;
+  // the client-side shim from app-sandbox.js is the single source of truth.
   res.send(body);
 });
 
@@ -337,7 +334,7 @@ app.use((err, req, res, next) => {
 // 16. SSL Configuration
 const { server } = configureSSL(app);
 
-const PORT = process.env.PORT || 3006;
+const PORT = process.env.PORT || 3003;
 const HOST = process.env.HOST || '127.0.0.1';
 
 // 17. Server error handling

@@ -41,13 +41,13 @@
     "express-rate-limit": "^8.5.2",
     "express-session": "^1.19.0",
     "helmet": "^8.2.0",
-    "imapflow": "^1.4.2",
+    "imapflow": "^1.4.3",
     "node-pop3": "^0.11.0",
-    "nodemailer": "^9.0.1",
+    "nodemailer": "^9.0.3",
     "postal-mime": "^2.7.5",
     "reflect-metadata": "^0.2.2",
     "better-sqlite3-session-store": "^0.1.0",
-    "tar": "^7.5.17",
+    "tar": "^7.5.19",
     "uuid": "^14.0.1"
   },
   "devDependencies": {

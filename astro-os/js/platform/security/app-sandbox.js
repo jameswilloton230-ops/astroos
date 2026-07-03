@@ -961,17 +961,49 @@ const AppSandbox = (() => {
       return respondError(webview, 'nova:net:fetch', requestId, 'PERMISSION_DENIED', `${netPerm} permission required`);
     }
     try {
-      const res = await fetch(classified.url, {
-        method: safeMethod,
-        headers: headers || {},
-        body: body || null,
-      });
-      const resBody = await res.text();
+      let res, resBody, resStatus, resStatusText, resHeaders;
+
+      if (classified.isInternal) {
+        // Same-origin requests don't hit CORS, so go direct.
+        res = await fetch(classified.url, {
+          method: safeMethod,
+          headers: headers || {},
+          body: body || null,
+        });
+        resBody = await res.text();
+        resStatus = res.status;
+        resStatusText = res.statusText;
+        resHeaders = Object.fromEntries(res.headers.entries());
+      } else {
+        // External requests go through the server-side proxy. A direct fetch()
+        // from this document would be subject to the target server's CORS
+        // policy (most external APIs don't allow browser-origin requests),
+        // so we hand the request to /api/proxy, which makes it server-to-server.
+        const proxyRes = await fetch('/api/proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: classified.url,
+            method: safeMethod,
+            headers: headers || {},
+            body: body || null,
+          }),
+        });
+        const proxyJson = await proxyRes.json();
+        if (!proxyRes.ok) {
+          return respondError(webview, 'nova:net:fetch', requestId, 'NETWORK_ERROR', proxyJson?.error || `Proxy request failed (${proxyRes.status})`);
+        }
+        resStatus = proxyJson.status;
+        resStatusText = proxyJson.statusText;
+        resHeaders = proxyJson.headers || {};
+        resBody = proxyJson.body || '';
+      }
+
       return respond(webview, 'nova:net:fetch', requestId, {
         success: true,
-        status: res.status,
-        statusText: res.statusText,
-        headers: Object.fromEntries(res.headers.entries()),
+        status: resStatus,
+        statusText: resStatusText,
+        headers: resHeaders,
         body: resBody,
       });
     } catch (e) {
@@ -1877,12 +1909,24 @@ const AppSandbox = (() => {
 
   /**
    * Build a safe sandbox attribute string from an app's sandbox config.
-   * allow-same-origin is always stripped — combining it with allow-scripts
-   * is a known sandbox escape. Same-origin access is already provided by
-   * the webview's partition, so this token is both unsafe and unnecessary.
+   *
+   * allow-same-origin is included by default. Without it, content served
+   * from https://localhost:* gets an opaque/null origin inside the webview
+   * (per the HTML sandboxing spec), which silently breaks the postMessage
+   * bridge: respond() targets webview.contentWindow.postMessage(msg,
+   * window.location.origin), and that delivery is dropped — with no error —
+   * whenever the target's actual origin doesn't match. allow-scripts +
+   * allow-same-origin together is normally flagged as a sandbox-escape
+   * pattern for same-document <iframe>s, because it can let framed content
+   * reach into the embedding page's DOM. That risk doesn't apply the same
+   * way here: the <webview> guest runs in its own OS-level process with its
+   * own storage partition, which is the real isolation boundary — not the
+   * sandbox attribute. allow-same-origin here only governs how the served
+   * app content perceives its own origin (needed for postMessage/storage to
+   * work at all), not whether it can access the host app.
    */
   function sanitizeSandboxAttr(sandboxConfig, appId) {
-    const tokens = [];
+    const tokens = ['allow-same-origin'];
 
     // Check for a capability. Accepts both camelCase (object key) and
     // kebab-case (string token) forms — the original code only checked

@@ -434,8 +434,192 @@ function setupFrameCheckProxy(app) {
 }
 // ── End Frame-Embed Check Proxy ────────────────────────────────────────────
 
+// ── App Network Proxy ──────────────────────────────────────────────────────
+// Used by app-sandbox.js handleNetFetch to make outbound requests server-side,
+// bypassing browser CORS restrictions for apps with the net:external permission.
+//
+// Security model:
+//   - Only reachable from the same origin (enforced by the sandbox's IPC flow;
+//     the sandbox calls /api/proxy, not the iframe directly).
+//   - Private/internal IPs blocked (SSRF prevention).
+//   - Allowlisted HTTP methods only.
+//   - Response size capped to prevent memory exhaustion.
+//   - Rate limited per IP.
+
+const APP_PROXY_TIMEOUT    = 30 * 1000;      // 30 s — match IPC timeout
+const APP_PROXY_SIZE_CAP   = 10 * 1024 * 1024; // 10 MB
+const APP_PROXY_METHODS    = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+
+// Reuse the private-host check already defined for the email image proxy.
+// If this module is ever split up, inline the same logic here.
+function _isPrivateAppHost(hostname) {
+    const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    const PRIVATE_EXACT = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '[::1]', '[::]']);
+    const PRIVATE_PREFIXES = ['10.', '172.16.', '172.17.', '172.18.', '172.19.',
+        '172.20.', '172.21.', '172.22.', '172.23.', '172.24.', '172.25.',
+        '172.26.', '172.27.', '172.28.', '172.29.', '172.30.', '172.31.',
+        '192.168.', '169.254.', '100.64.'];
+    if (PRIVATE_EXACT.has(h)) return true;
+    if (PRIVATE_PREFIXES.some(p => h.startsWith(p))) return true;
+    if (h.endsWith('.local') || h.endsWith('.internal')) return true;
+    return false;
+}
+
+const appProxyLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,  // generous — chat apps can send many messages per minute
+    message: { error: 'Too many proxy requests, slow down.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+function setupAppNetworkProxy(app) {
+    app.post('/api/proxy', appProxyLimiter, async (req, res) => {
+        const { url: rawUrl, method: rawMethod, headers: reqHeaders, body: reqBody } = req.body ?? {};
+
+        // Validate URL
+        if (!rawUrl || typeof rawUrl !== 'string') {
+            return res.status(400).json({ error: 'url is required' });
+        }
+        let urlObj;
+        try { urlObj = new URL(rawUrl); }
+        catch (_) { return res.status(400).json({ error: 'Invalid URL' }); }
+
+        if (!['http:', 'https:'].includes(urlObj.protocol)) {
+            return res.status(400).json({ error: 'Only http and https URLs are supported' });
+        }
+        if (_isPrivateAppHost(urlObj.hostname)) {
+            return res.status(403).json({ error: 'Internal URLs are not permitted' });
+        }
+
+        // Validate method
+        const method = (rawMethod || 'GET').toUpperCase();
+        if (!APP_PROXY_METHODS.has(method)) {
+            return res.status(400).json({ error: `Method not allowed: ${method}` });
+        }
+
+        // Strip hop-by-hop headers that must not be forwarded
+        const HOP_BY_HOP = new Set([
+            'host', 'connection', 'keep-alive', 'proxy-authenticate',
+            'proxy-authorization', 'te', 'trailers', 'transfer-encoding', 'upgrade',
+        ]);
+        const outHeaders = {};
+        if (reqHeaders && typeof reqHeaders === 'object') {
+            for (const [k, v] of Object.entries(reqHeaders)) {
+                if (!HOP_BY_HOP.has(k.toLowerCase())) {
+                    outHeaders[k] = v;
+                }
+            }
+        }
+
+        // Follow redirects manually so each hop gets re-validated against the
+        // private-host check (mirrors the pattern used by fetchEmailImage above).
+        // Without this, a public URL that 302s to an internal/metadata address
+        // would sail through the initial check and still reach it via fetch's
+        // own automatic redirect handling.
+        const MAX_PROXY_REDIRECTS = 5;
+        let currentUrl = urlObj.toString();
+        const visitedUrls = new Set();
+        let resp;
+
+        for (let hop = 0; hop <= MAX_PROXY_REDIRECTS; hop++) {
+            if (visitedUrls.has(currentUrl)) {
+                return res.status(400).json({ error: 'Redirect loop detected' });
+            }
+            visitedUrls.add(currentUrl);
+
+            let hopUrlObj;
+            try { hopUrlObj = new URL(currentUrl); }
+            catch (_) { return res.status(400).json({ error: 'Invalid redirect URL' }); }
+
+            if (!['http:', 'https:'].includes(hopUrlObj.protocol)) {
+                return res.status(400).json({ error: 'Only http and https URLs are supported' });
+            }
+            if (_isPrivateAppHost(hopUrlObj.hostname)) {
+                return res.status(403).json({ error: 'Internal URLs are not permitted' });
+            }
+
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), APP_PROXY_TIMEOUT);
+
+            let hopResp;
+            try {
+                hopResp = await fetch(currentUrl, {
+                    method,
+                    headers: outHeaders,
+                    body: (method === 'GET' || method === 'HEAD') ? undefined : (reqBody ?? null),
+                    redirect: 'manual',
+                    signal: controller.signal,
+                });
+            } catch (err) {
+                clearTimeout(timer);
+                return res.status(502).json({ error: `Network error: ${err.message}` });
+            } finally {
+                clearTimeout(timer);
+            }
+
+            if (hopResp.status >= 300 && hopResp.status < 400) {
+                const loc = hopResp.headers.get('location');
+                if (!loc) return res.status(502).json({ error: 'Redirect with no Location header' });
+                try { currentUrl = new URL(loc, currentUrl).toString(); }
+                catch (_) { return res.status(400).json({ error: 'Invalid redirect target' }); }
+                continue;
+            }
+
+            resp = hopResp;
+            break;
+        }
+
+        if (!resp) {
+            return res.status(502).json({ error: 'Too many redirects' });
+        }
+
+        // Read response body with size cap
+        const chunks = [];
+        let total = 0;
+        try {
+            const reader = resp.body.getReader();
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                total += value.length;
+                if (total > APP_PROXY_SIZE_CAP) {
+                    reader.cancel();
+                    return res.status(502).json({ error: 'Response too large' });
+                }
+                chunks.push(value);
+            }
+        } catch (err) {
+            return res.status(502).json({ error: `Read error: ${err.message}` });
+        }
+
+        const bodyText = Buffer.concat(chunks.map(c => Buffer.from(c))).toString('utf8');
+
+        // Forward a safe subset of response headers
+        const SAFE_RESPONSE_HEADERS = new Set([
+            'content-type', 'content-language', 'cache-control',
+            'etag', 'last-modified', 'x-request-id',
+        ]);
+        const outRespHeaders = {};
+        for (const [k, v] of resp.headers.entries()) {
+            if (SAFE_RESPONSE_HEADERS.has(k.toLowerCase())) {
+                outRespHeaders[k] = v;
+            }
+        }
+
+        res.json({
+            status:     resp.status,
+            statusText: resp.statusText,
+            headers:    outRespHeaders,
+            body:       bodyText,
+        });
+    });
+}
+// ── End App Network Proxy ──────────────────────────────────────────────────
+
 module.exports = {
     setupSuggestProxy,
     setupEmailImageProxy,
     setupFrameCheckProxy,
+    setupAppNetworkProxy,
 };

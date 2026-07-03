@@ -23,6 +23,40 @@ registerApp({
     // ── Helpers ────────────────────────────────────────────────────
     const PackageStore = window.NovaAppPackageStore || null;
 
+    // Builds the CSP injected into sandboxed app HTML. Only the webapp
+    // template needs frame-src — everything else gets none, since no other
+    // template embeds external content. We validate appData.url rather than
+    // trusting it outright: it's written by the app's own creator (or by
+    // hand-editing manifest.json), not vetted, so a malformed or javascript:
+    // value here must not end up unescaped inside an HTML attribute.
+    function buildSandboxCSP(appData) {
+      const base = "default-src 'self' blob: data: 'unsafe-inline' 'unsafe-eval'; " +
+        "script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; " +
+        "style-src 'self' 'unsafe-inline' blob: data:; " +
+        "img-src 'self' blob: data: https:; " +
+        "font-src 'self' blob: data:; " +
+        "connect-src 'self' http://localhost:* https://localhost:*";
+
+      let frameSrc = '';
+      if (appData?.url) {
+        try {
+          const parsed = new URL(appData.url);
+          if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+            // Scope to exactly this app's declared origin — not a wildcard —
+            // so one app can't use this allowance to frame arbitrary sites.
+            frameSrc = '; frame-src ' + parsed.origin;
+          } else {
+            console.warn('[AppManager] app declares non-http(s) url, ignoring for frame-src:', appData.url);
+          }
+        } catch (e) {
+          console.warn('[AppManager] app declares invalid url, ignoring for frame-src:', appData.url);
+        }
+      }
+
+      const escaped = (base + frameSrc).replace(/"/g, '&quot;');
+      return '<meta http-equiv="Content-Security-Policy" content="' + escaped + '">\n';
+    }
+
     function resolveIcon(app) {
       if (!app?.icon || typeof app.icon !== 'string') return null;
       if (/^data:|^https?:\/\//i.test(app.icon)) return app.icon;
@@ -169,9 +203,13 @@ registerApp({
 
           if (allDangerous.length > 0 && typeof AppPermissionManager !== 'undefined') {
             const mgr = AppPermissionManager;
-            const missing = allDangerous.filter(p =>
-              !mgr.isGranted(p, appId) && !(mgr.isDenied && mgr.isDenied(p, appId))
-            );
+            // Only skip permissions that are already granted.
+            // Denied permissions are intentionally NOT filtered here — requestPermission()
+            // returns false for them immediately without re-prompting, which causes
+            // requestAll() to return false, which blocks the app launch correctly.
+            // Previously filtering out isDenied() here meant apps silently launched
+            // with external network permission denied, then failed at fetch time.
+            const missing = allDangerous.filter(p => !mgr.isGranted(p, appId));
             if (missing.length > 0) {
               const ok = await mgr.requestAll(missing, appId, appData.name || appId);
               if (!ok) {
@@ -256,7 +294,7 @@ registerApp({
             try {
               const shimmedFiles = Object.assign({}, appData.files);
               let serveHtml = html;
-              const relaxed = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\' blob: data: \'unsafe-inline\' \'unsafe-eval\'; script-src \'self\' blob: \'unsafe-inline\' \'unsafe-eval\'; style-src \'self\' \'unsafe-inline\' blob: data:; img-src \'self\' blob: data: https:; font-src \'self\' blob: data:; connect-src \'self\' http://localhost:* https://localhost:*">\n';
+              const relaxed = buildSandboxCSP(appData);
               const inline = '<script>(function(){var o=window.location.origin;window.nova={ipc:function(t,e){var r=new Promise(function(r,s){var a="s"+Math.random().toString(36).slice(2)+Date.now().toString(36),n=setTimeout(function(){p.has(a)&&(p.delete(a),s(TypeError("timeout "+t)))},3e4);p.set(a,{resolve:r,reject:s,timer:n}),window.parent.postMessage({type:t,requestId:a,payload:e||{}},o)});return r}};var p=new Map;window.addEventListener("message",function(t){if(t.origin!==o)return;var e=t.data;if(!e||!e.requestId)return;if(e.type==="nova:ready:response"&&e.result){var r=e.result.permissions||[];try{window.allowedPermissions=r,window.__novaPermResponse=e.result}catch(t){}}var s=p.get(e.requestId);if(!s)return;clearTimeout(s.timer),p.delete(e.requestId),e.error?s.reject(TypeError(e.error.message||String(e.error))):s.resolve(e.result)});window.__novaPrivateStore={}})<\/script>\n';
               if (!/<head[\s>]/i.test(serveHtml)) {
                 serveHtml = inline + '\n' + relaxed + '\n' + serveHtml;
@@ -325,7 +363,7 @@ registerApp({
               wrappedHtml = wrappedHtml.replace(/<head(\s[^>]*)?>/i, (match) => match + '\n' + tag);
             }
 
-            const relaxed = '<meta http-equiv="Content-Security-Policy" content="default-src \'self\' blob: data: \'unsafe-inline\' \'unsafe-eval\'; script-src \'self\' blob: \'unsafe-inline\' \'unsafe-eval\'; style-src \'self\' \'unsafe-inline\' blob: data:; img-src \'self\' blob: data: https:; font-src \'self\' blob: data:; connect-src \'self\' http://localhost:* https://localhost:*">\n';
+            const relaxed = buildSandboxCSP(appData);
             const inline = '<script>(function(){var o=window.location.origin;window.nova={ipc:function(t,e){var r=new Promise(function(r,s){var a="s"+Math.random().toString(36).slice(2)+Date.now().toString(36),n=setTimeout(function(){p.has(a)&&(p.delete(a),s(TypeError("timeout "+t)))},3e4);p.set(a,{resolve:r,reject:s,timer:n}),window.parent.postMessage({type:t,requestId:a,payload:e||{}},o)});return r}};var p=new Map;window.addEventListener("message",function(t){if(t.origin!==o)return;var e=t.data;if(!e||!e.requestId)return;if(e.type==="nova:ready:response"&&e.result){var r=e.result.permissions||[];try{window.allowedPermissions=r,window.__novaPermResponse=e.result}catch(t){}}var s=p.get(e.requestId);if(!s)return;clearTimeout(s.timer),p.delete(e.requestId),e.error?s.reject(TypeError(e.error.message||String(e.error))):s.resolve(e.result)});window.__novaPrivateStore={}})<\/script>\n';
             if (!/<head[\s>]/i.test(wrappedHtml)) {
               wrappedHtml = inline + '\n' + relaxed + '\n' + wrappedHtml;

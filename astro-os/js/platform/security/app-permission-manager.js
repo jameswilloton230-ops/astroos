@@ -282,21 +282,26 @@ const AppPermissionManager = (() => {
   async function requestAll(permissions, appId, appName) {
     if (!permissions?.length) return true;
 
-    const pending = permissions.filter(p => !isGranted(p, appId) && !isDenied(p, appId));
+    // Only skip permissions that are already granted — denied ones need to be
+    // surfaced so the caller knows to block the app, and requestPermission()
+    // will return false for them immediately without re-prompting.
+    const pending = permissions.filter(p => !isGranted(p, appId));
     if (!pending.length) return true;
 
     const resolvedName = appName
       ?? (typeof AppRegistry !== 'undefined' ? AppRegistry.getApp(appId)?.name : null)
       ?? appId;
 
+    let allGranted = true;
     for (let i = 0; i < pending.length; i++) {
-      await requestPermission(pending[i], appId, {
+      const granted = await requestPermission(pending[i], appId, {
         appName : resolvedName,
         current : i + 1,
         total   : pending.length,
       });
+      if (!granted) allGranted = false;
     }
-    return true;
+    return allGranted;
   }
 
   // ── Grant / revoke ─────────────────────────────────────────────────────────
