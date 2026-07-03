@@ -18,6 +18,31 @@ registerApp({
     let bitState = 0;
     let expr = '';
 
+    // ── History persistence ──────────────────────────────────────────────────
+    const HIST_KEY = 'nova_calc_history';
+    const HIST_MAX = 50;
+
+    function loadHistory() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(HIST_KEY) ?? '[]');
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveHistory(arr) {
+      try { lsSave(HIST_KEY, arr); } catch { /* degrade silently */ }
+    }
+
+    function pushHistory(expression, value) {
+      const arr = loadHistory();
+      arr.unshift({ expr: expression, value, ts: Date.now() });
+      if (arr.length > HIST_MAX) arr.length = HIST_MAX;
+      saveHistory(arr);
+      renderHistory();
+    }
+
     // ── Allocation-Light Character-Code Parser ───────────────────────────────
     class HardcoreParser {
       #s = '';
@@ -122,7 +147,9 @@ registerApp({
     const parser = new HardcoreParser();
 
     // ── DOM construction ─────────────────────────────────────────────────────
-    content.style.cssText = 'display:flex;flex-direction:column;height:100%;padding:14px;background:var(--bg-base);gap:10px;';
+    content.style.cssText = 'display:flex;flex-direction:column;height:100%;padding:14px;background:var(--bg-base);gap:10px;position:relative;overflow:hidden;';
+
+    const topRow = createEl('div', { style: 'display:flex;align-items:center;gap:8px;' });
 
     const display = createEl('input', {
       id:        'calculator-display',
@@ -132,8 +159,17 @@ registerApp({
       readonly:  'readonly',
       inputMode: 'none',
       placeholder: '0',
-      style: 'width:100%;height:58px;border:1px solid var(--border-default);border-radius:14px;background:var(--bg-elevated);color:var(--text-primary);font-size:28px;font-weight:600;text-align:right;padding:0 14px;outline:none;font-family:var(--font-mono);box-sizing:border-box;'
+      style: 'flex:1;width:100%;height:58px;border:1px solid var(--border-default);border-radius:var(--r-sm);background:var(--bg-elevated);color:var(--text-primary);font-size:28px;font-weight:600;text-align:right;padding:0 14px;outline:none;font-family:var(--font-mono);box-sizing:border-box;'
     });
+
+    const historyToggle = createEl('button', {
+      title: 'History',
+      'aria-label': 'Toggle calculation history',
+      style: 'flex-shrink:0;width:42px;height:58px;border:1px solid var(--border-default);border-radius:var(--r-sm);background:var(--bg-overlay);color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;'
+    });
+    historyToggle.innerHTML = svgIcon('clock', 18);
+
+    topRow.append(display, historyToggle);
 
     const result = createEl('div', {
       textContent: 'Ready',
@@ -143,6 +179,65 @@ registerApp({
     const buttons = createEl('div', {
       style: 'display:grid;grid-template-columns:repeat(4,1fr);gap:6px;flex:none;align-content:start;'
     });
+
+    // ── History panel (slide-over) ──────────────────────────────────────────
+    const historyPanel = createEl('div', {
+      style: 'position:absolute;inset:0;background:var(--bg-elevated);border-radius:var(--r-md);transform:translateX(100%);transition:transform 0.18s ease;display:flex;flex-direction:column;z-index:5;box-shadow:-2px 0 12px rgba(0,0,0,0.3);'
+    });
+
+    const historyHeader = createEl('div', {
+      style: 'display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border-subtle);flex-shrink:0;'
+    });
+    historyHeader.appendChild(createEl('span', { textContent: 'History', style: 'font-size:13px;font-weight:600;color:var(--text-primary);' }));
+
+    const historyHeaderBtns = createEl('div', { style: 'display:flex;gap:6px;' });
+    const clearHistoryBtn = createEl('button', {
+      textContent: 'Clear',
+      style: 'font-size:11px;color:var(--text-danger);background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:var(--r-xs);'
+    });
+    const closeHistoryBtn = createEl('button', {
+      'aria-label': 'Close history',
+      style: 'background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;border-radius:var(--r-xs);display:flex;align-items:center;'
+    });
+    closeHistoryBtn.innerHTML = svgIcon('x', 16);
+    historyHeaderBtns.append(clearHistoryBtn, closeHistoryBtn);
+    historyHeader.appendChild(historyHeaderBtns);
+
+    const historyList = createEl('div', { style: 'flex:1;overflow-y:auto;' });
+
+    historyPanel.append(historyHeader, historyList);
+
+    function renderHistory() {
+      const items = loadHistory();
+      historyList.replaceChildren();
+
+      if (items.length === 0) {
+        historyList.appendChild(createEl('div', {
+          textContent: 'No calculations yet',
+          style: 'display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:12px;'
+        }));
+        return;
+      }
+
+      const frag = document.createDocumentFragment();
+      for (const item of items) {
+        const row = createEl('div', {
+          style: 'padding:10px 14px;border-bottom:1px solid var(--border-subtle);cursor:pointer;',
+        });
+        row.dataset.reuse = item.value;
+        const exprEl = createEl('div', {
+          textContent: item.expr,
+          style: 'font-size:12px;color:var(--text-muted);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+        });
+        const valEl = createEl('div', {
+          textContent: `= ${item.value}`,
+          style: 'font-size:16px;color:var(--text-primary);font-family:var(--font-mono);font-weight:600;text-align:right;'
+        });
+        row.append(exprEl, valEl);
+        frag.appendChild(row);
+      }
+      historyList.appendChild(frag);
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     // Fix #4: Single scroll helper — was duplicated in update() and equals()
@@ -192,11 +287,13 @@ registerApp({
       if (!expr) return;
       try {
         const out = parser.evaluate(expr);
+        const prevExpr = expr;
         expr     = String(out);
         bitState = 1;
         display.value = expr;
         scrollEnd();
         setResult(expr);
+        pushHistory(prevExpr, expr);
       } catch {
         setResult('Invalid expression', true);
       }
@@ -216,14 +313,14 @@ registerApp({
       fragment.appendChild(createEl('button', {
         textContent: labels[i],
         'data-key':  labels[i],
-        style: 'height:42px;border:1px solid var(--border-default);border-radius:12px;background:var(--bg-overlay);color:var(--text-primary);font-size:16px;font-weight:600;cursor:pointer;transition:transform 0.05s ease;'
+        style: 'width:52px;height:52px;justify-self:center;border:1px solid var(--border-default);border-radius:50%;background:var(--bg-overlay);color:var(--text-primary);font-size:16px;font-weight:600;cursor:pointer;transition:transform 0.05s ease;display:flex;align-items:center;justify-content:center;'
       }));
     }
 
     fragment.appendChild(createEl('button', {
       textContent: '=',
       'data-key':  '=',
-      style: 'height:42px;border:1px solid var(--accent);border-radius:12px;background:var(--accent);color:#fff;font-size:16px;font-weight:700;cursor:pointer;grid-column:1/-1;transition:transform 0.05s ease;'
+      style: 'height:42px;border:1px solid var(--accent);border-radius:var(--r-sm);background:var(--accent);color:#fff;font-size:16px;font-weight:700;cursor:pointer;grid-column:1/-1;transition:transform 0.05s ease;'
     }));
 
     buttons.appendChild(fragment);
@@ -248,6 +345,35 @@ registerApp({
     buttons.addEventListener('click', ({ target }) => {
       const btn = target.closest('[data-key]');
       if (btn) handleKeyAction(btn.dataset.key);
+    }, { signal });
+
+    // ── History panel wiring ─────────────────────────────────────────────────
+    let historyOpen = false;
+    const setHistoryOpen = (open) => {
+      historyOpen = open;
+      historyPanel.style.transform = open ? 'translateX(0)' : 'translateX(100%)';
+    };
+
+    historyToggle.addEventListener('click', () => {
+      if (!historyOpen) renderHistory();
+      setHistoryOpen(!historyOpen);
+    }, { signal });
+
+    closeHistoryBtn.addEventListener('click', () => setHistoryOpen(false), { signal });
+
+    clearHistoryBtn.addEventListener('click', () => {
+      saveHistory([]);
+      renderHistory();
+    }, { signal });
+
+    // Tap a history row to load that result back into the display.
+    historyList.addEventListener('click', (e) => {
+      const row = e.target.closest('[data-reuse]');
+      if (!row) return;
+      expr = row.dataset.reuse;
+      bitState = 1;
+      update();
+      setHistoryOpen(false);
     }, { signal });
 
     let pressedBtn = null;
@@ -287,10 +413,11 @@ registerApp({
     }, { signal });
 
     // ── Mount ─────────────────────────────────────────────────────────────────
-    content.append(display, result, buttons);
+    content.append(topRow, result, buttons, historyPanel);
     content.tabIndex = 0;
     requestAnimationFrame(() => content.focus());
     update();
+    renderHistory();
 
     return () => ac.abort();
   }

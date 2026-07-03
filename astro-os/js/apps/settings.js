@@ -487,7 +487,17 @@ registerApp({
               wpCard.addEventListener('click', () => {
                 const desktop = document.getElementById('desktop');
                 if (desktop) {
-                  desktop.style.backgroundImage = wp.gradient;
+                  // FIX: a flat hex like '#0f0f0f' is not a valid backgroundImage value —
+                  // it gets silently rejected and the previous background stays showing.
+                  // Route flat colors to backgroundColor, everything else to backgroundImage.
+                  const isFlatColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(wp.gradient.trim());
+                  if (isFlatColor) {
+                    desktop.style.backgroundColor = wp.gradient;
+                    desktop.style.backgroundImage = 'none';
+                  } else {
+                    desktop.style.backgroundImage = wp.gradient;
+                    desktop.style.backgroundColor = '';
+                  }
                 }
                 OS.settings.set('wallpaperId', wp.id);
                 OS.settings.set('customWallpaper', null);
@@ -533,7 +543,14 @@ registerApp({
               } else {
                 const currentWallpaper = PRESET_WALLPAPERS.find(wp => wp.id === currentWallpaperId);
                 if (currentWallpaper) {
-                  desktop.style.backgroundImage = currentWallpaper.gradient;
+                  const isFlatColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(currentWallpaper.gradient.trim());
+                  if (isFlatColor) {
+                    desktop.style.backgroundColor = currentWallpaper.gradient;
+                    desktop.style.backgroundImage = 'none';
+                  } else {
+                    desktop.style.backgroundImage = currentWallpaper.gradient;
+                    desktop.style.backgroundColor = '';
+                  }
                 }
               }
             }
@@ -572,9 +589,19 @@ registerApp({
             const resetBtn = createEl('button', { className: 'btn btn-sm', textContent: 'Reset to Default', style: { marginLeft: '8px' } });
             resetBtn.addEventListener('click', () => {
               const desktop = document.getElementById('desktop');
-              const defaultGradient = PRESET_WALLPAPERS[0].gradient; // stock-blue
+              const defaultGradient = PRESET_WALLPAPERS[0].gradient; // stock-blue id, actually "Lineage Dark" #0f0f0f
               if (desktop) {
-                desktop.style.backgroundImage = defaultGradient;
+                // FIX: same flat-hex-vs-gradient issue as the click handler above —
+                // '#0f0f0f' assigned to backgroundImage is invalid and gets ignored,
+                // which is why Reset previously appeared to do nothing.
+                const isFlatColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(defaultGradient.trim());
+                if (isFlatColor) {
+                  desktop.style.backgroundColor = defaultGradient;
+                  desktop.style.backgroundImage = 'none';
+                } else {
+                  desktop.style.backgroundImage = defaultGradient;
+                  desktop.style.backgroundColor = '';
+                }
                 desktop.style.backgroundSize = '';
                 desktop.style.backgroundPosition = '';
                 desktop.style.backgroundRepeat = '';
