@@ -827,7 +827,7 @@
       header.className = 'store-header';
       const brand = document.createElement('div');
       brand.className = 'store-brand';
-      brand.innerHTML = '<span class="store-brand-mark" aria-hidden="true">N</span><span><span class="store-title">AstroOS</span><span class="store-brand-subtitle">Store</span></span>';
+      brand.innerHTML = '<span class="store-brand-mark" aria-hidden="true">N</span><span><span class="store-title">NovaByte</span><span class="store-brand-subtitle">Store</span></span>';
       const settingsButton = document.createElement('button');
       settingsButton.type = 'button';
       settingsButton.className = 'store-settings-button';

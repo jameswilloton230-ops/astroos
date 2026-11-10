@@ -1543,10 +1543,12 @@ registerApp({
     let selectedPkgId = null;
 
     // ── Root layout ────────────────────────────────────────────────
+    content.classList.add('app-manager-content');
     content.style.cssText = 'display:flex;flex-direction:column;overflow:hidden;height:100%;';
 
     // ── Tab bar ────────────────────────────────────────────────────
     const tabBar = createEl('div', {
+      className: 'am-tabs',
       style: 'display:flex;align-items:center;gap:2px;padding:10px 14px 0;border-bottom:1px solid var(--border-subtle);background:var(--bg-sunken);flex-shrink:0;'
     });
 
@@ -1558,6 +1560,7 @@ registerApp({
 
     TABS.forEach(t => {
       const btn = createEl('button', {
+        className: 'am-tab',
         style: 'display:flex;align-items:center;gap:6px;padding:7px 14px;border:none;border-radius:10px 10px 0 0;cursor:pointer;font-size:13px;font-weight:600;transition:all 0.12s;background:none;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;'
       });
       btn.innerHTML = svgIcon(t.icon, 13) + ' ' + t.label;
@@ -1577,7 +1580,7 @@ registerApp({
       }
     }
 
-    const body = createEl('div', { style: 'flex:1;display:flex;overflow:hidden;' });
+    const body = createEl('div', { className: 'am-body', style: 'flex:1;display:flex;overflow:hidden;' });
     content.appendChild(body);
 
     function switchTab(id) {
@@ -1592,32 +1595,34 @@ registerApp({
     // PACKAGES PANEL
     // ══════════════════════════════════════════════════════════════
     function renderPackagesPanel() {
-      const root = createEl('div', { style: 'display:flex;width:100%;height:100%;overflow:hidden;font-size:13px;' });
+      const root = createEl('div', { className: 'am-root am-packages', style: 'display:flex;width:100%;height:100%;overflow:hidden;font-size:13px;' });
 
       // ── Sidebar ────────────────────────────────────────────────
       const sidebar = createEl('div', {
+        className: 'am-sidebar',
         style: 'width:300px;min-width:260px;display:flex;flex-direction:column;border-right:1px solid var(--border-subtle);background:var(--bg-sunken);flex-shrink:0;'
       });
 
       // Toolbar: search + install
-      const toolbar = createEl('div', { style: 'padding:10px;display:flex;gap:6px;border-bottom:1px solid var(--border-subtle);' });
+      const toolbar = createEl('div', { className: 'am-toolbar', style: 'padding:10px;display:flex;gap:6px;border-bottom:1px solid var(--border-subtle);' });
       const searchEl = createEl('input', {
         type: 'text', id: 'app-installer-search-input', name: 'app-installer-search',
         placeholder: 'Search\u2026',
         style: 'flex:1;padding:5px 9px;background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:8px;color:var(--text-primary);font-size:12px;outline:none;'
       });
       const installBtn = createEl('button', {
+        className: 'am-button-primary',
         style: 'padding:5px 10px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0;'
       });
       installBtn.innerHTML = svgIcon('plus', 12) + ' Install';
       toolbar.append(searchEl, installBtn);
       sidebar.appendChild(toolbar);
 
-      const listEl = createEl('div', { style: 'flex:1;overflow-y:auto;padding:6px;' });
+      const listEl = createEl('div', { className: 'am-list', style: 'flex:1;overflow-y:auto;padding:6px;' });
       sidebar.appendChild(listEl);
 
       // ── Detail panel ───────────────────────────────────────────
-      const detail = createEl('div', { style: 'flex:1;display:flex;flex-direction:column;overflow:hidden;' });
+      const detail = createEl('div', { className: 'am-detail', style: 'flex:1;display:flex;flex-direction:column;overflow:hidden;' });
 
       // Package picker — SystemDialogs (multi-select), results wrapped as File
       // objects so processFile/processFiles don't care where they came from.
@@ -1757,9 +1762,11 @@ registerApp({
           const isSel = app.id === selectedPkgId;
           const isDis = disabledSet.has(app.id);
           const item = createEl('div', {
+            className: 'am-list-item',
             style: `display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:10px;cursor:pointer;transition:background 0.1s;${isSel ? 'background:var(--accent-muted);' : ''}`
           });
           const iconWrap = createEl('div', {
+            className: 'am-list-icon',
             style: `width:34px;height:34px;background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:${isDis ? 'var(--text-muted)' : 'var(--accent)'};opacity:${isDis ? 0.5 : 1};`
           });
           const iconSrc = resolveIcon(app);
@@ -1770,7 +1777,7 @@ registerApp({
           } else {
             iconWrap.innerHTML = svgIcon(app.icon || '/assets/no_app_icon.svg', 17);
           }
-          const meta = createEl('div', { style: 'flex:1;min-width:0;' });
+          const meta = createEl('div', { className: 'am-list-meta', style: 'flex:1;min-width:0;' });
           // SECURITY: Use escapeHtml for user-controlled app.name
           meta.innerHTML = `<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isDis ? 'var(--text-muted)' : 'var(--text-primary)'};">${escapeHtml(app.name)}</div><div style="font-size:10px;color:var(--text-muted);margin-top:2px;display:flex;align-items:center;gap:5px;">v${escapeHtml(app.version || '1.0.0')}${isDis ? ' \u00B7 disabled' : ''} ${verifyBadgeHtml(app, { compact: true })}</div>`;
           item.append(iconWrap, meta);
@@ -1790,8 +1797,8 @@ registerApp({
         const app = installedApps.find(a => a.id === selectedPkgId);
 
         if (!app) {
-          const drop = createEl('div', { style: 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--text-muted);padding:40px;' });
-          const dropBox = createEl('div', { style: 'width:110px;height:110px;border:2px dashed var(--border-default);border-radius:24px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;' });
+          const drop = createEl('div', { className: 'am-empty-state', style: 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--text-muted);padding:40px;' });
+          const dropBox = createEl('div', { className: 'am-drop-icon', style: 'width:110px;height:110px;border:2px dashed var(--border-default);border-radius:24px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;' });
           dropBox.innerHTML = svgIcon('package', 44);
           const dropLabel = createEl('div', { style: 'text-align:center;line-height:1.9;' });
           dropLabel.innerHTML = '<div style="font-size:16px;font-weight:600;color:var(--text-secondary);">Install a .novaapp Package</div><div style="font-size:12px;margin-top:4px;">Drop a <code style="color:var(--accent);">.novaapp</code> file here,<br>or click <strong style="color:var(--text-primary);">Install</strong>.</div>';
@@ -1850,9 +1857,11 @@ registerApp({
 
         // ── Header ─────────────────────────────────────────────
         const header = createEl('div', {
+          className: 'am-detail-header',
           style: 'padding:16px 20px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:14px;flex-shrink:0;'
         });
         const hIcon = createEl('div', {
+          className: 'am-detail-icon',
           style: `width:56px;height:56px;background:var(--bg-sunken);border:1px solid var(--border-default);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:${isDis ? 'var(--text-muted)' : 'var(--accent)'};opacity:${isDis ? 0.5 : 1};`
         });
         const iconSrc = resolveIcon(app);
@@ -1871,6 +1880,7 @@ registerApp({
 
         // ── Actions ─────────────────────────────────────────────
         const actionBar = createEl('div', {
+          className: 'am-actions',
           style: 'padding:10px 20px;border-bottom:1px solid var(--border-subtle);display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0;background:var(--bg-sunken);'
         });
 
@@ -2812,31 +2822,33 @@ registerApp({
 
       function getAllWebApps() { return wam ? wam.getAllApps() : []; }
 
-      const root = createEl('div', { style: 'display:flex;width:100%;height:100%;overflow:hidden;font-size:13px;' });
+      const root = createEl('div', { className: 'am-root am-webapps', style: 'display:flex;width:100%;height:100%;overflow:hidden;font-size:13px;' });
 
       // ── Sidebar ──────────────────────────────────────────────────
       const sidebar = createEl('div', {
+        className: 'am-sidebar',
         style: 'width:300px;min-width:260px;display:flex;flex-direction:column;border-right:1px solid var(--border-subtle);background:var(--bg-sunken);flex-shrink:0;'
       });
 
-      const toolbar = createEl('div', { style: 'padding:9px;display:flex;gap:6px;border-bottom:1px solid var(--border-subtle);' });
+      const toolbar = createEl('div', { className: 'am-toolbar', style: 'padding:9px;display:flex;gap:6px;border-bottom:1px solid var(--border-subtle);' });
       const searchEl = createEl('input', {
         type: 'text', id: 'notes-tasks-search-input', name: 'notes-tasks-search',
         placeholder: 'Search\u2026',
         style: 'flex:1;padding:5px 8px;background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:8px;color:var(--text-primary);font-size:12px;outline:none;min-width:0;'
       });
       const addBtn = createEl('button', {
+        className: 'am-button-primary',
         style: 'padding:5px 10px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0;'
       });
       addBtn.innerHTML = svgIcon('plus', 12) + ' Add';
       toolbar.append(searchEl, addBtn);
       sidebar.appendChild(toolbar);
 
-      const listEl = createEl('div', { style: 'flex:1;overflow-y:auto;padding:5px;' });
+      const listEl = createEl('div', { className: 'am-list', style: 'flex:1;overflow-y:auto;padding:5px;' });
       sidebar.appendChild(listEl);
 
       // ── Right panel ──────────────────────────────────────────────
-      const right = createEl('div', { style: 'flex:1;display:flex;flex-direction:column;overflow:hidden;' });
+      const right = createEl('div', { className: 'am-detail', style: 'flex:1;display:flex;flex-direction:column;overflow:hidden;' });
 
       let selectedWebId = null;
 
@@ -2880,9 +2892,11 @@ registerApp({
           const isSel = wa.id === selectedWebId;
           const host = extractHost(wa.url);
           const item = createEl('div', {
+            className: 'am-list-item',
             style: `display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:10px;cursor:pointer;transition:background 0.1s;${isSel ? 'background:var(--accent-muted);' : ''}`
           });
           const iconEl = createEl('div', {
+            className: 'am-list-icon',
             style: 'width:32px;height:32px;background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;'
           });
           if (wa.icon) {
@@ -2896,7 +2910,7 @@ registerApp({
           } else {
             iconEl.innerHTML = svgIcon('globe', 16);
           }
-          const meta = createEl('div', { style: 'flex:1;min-width:0;' });
+          const meta = createEl('div', { className: 'am-list-meta', style: 'flex:1;min-width:0;' });
           // SECURITY: escapeHtml for user-controlled wa.name
           meta.innerHTML = `<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-primary);font-size:12px;">${escapeHtml(wa.name)}</div><div style="font-size:10px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(host)}</div>`;
           item.append(iconEl, meta);
@@ -2918,7 +2932,7 @@ registerApp({
         if (!wa) {
           // ── Add form ────────────────────────────────────────────
           const wrap = createEl('div', { style: 'flex:1;overflow-y:auto;padding:28px;display:flex;align-items:flex-start;justify-content:center;' });
-          const card = createEl('div', { style: 'width:100%;max-width:420px;background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:14px;overflow:hidden;' });
+          const card = createEl('div', { className: 'am-webapp-form', style: 'width:100%;max-width:420px;background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:14px;overflow:hidden;' });
           const hdr = createEl('div', { style: 'padding:16px 18px;border-bottom:1px solid var(--border-subtle);background:var(--bg-sunken);' });
           hdr.innerHTML = `<div style="font-size:14px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px;">${svgIcon('plus', 15)} Add Web App</div><div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Pin any website as an app.</div>`;
           card.appendChild(hdr);

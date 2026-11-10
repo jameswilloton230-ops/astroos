@@ -972,7 +972,7 @@ const AppPermissionManager = (() => {
   // parsed as markup.
 
   const RISK_COLORS = Object.freeze({
-    low: '#3fb950', medium: '#d29922', high: '#f0883e', critical: '#f85149',
+    low: '#66bb6a', medium: '#ffa726', high: '#ff7043', critical: '#ef5350',
   });
 
   const RISK_ICONS = Object.freeze({
@@ -1000,13 +1000,13 @@ const AppPermissionManager = (() => {
       style: 'display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;',
     });
     row.append(el('span', {
-      style: 'font-size:11px;color:#8b949e;letter-spacing:.05em;text-transform:uppercase;',
+      style: 'font-size:11px;color:var(--text-secondary,#a0a0a0);letter-spacing:.05em;text-transform:uppercase;',
       text : `Permission ${current} of ${total}`,
     }));
     const dots = el('div', { style: 'display:flex;gap:4px;' });
     for (let i = 0; i < total; i++) {
       dots.append(el('div', {
-        style: `width:6px;height:6px;border-radius:50%;background:${i < current ? '#58a6ff' : 'rgba(255,255,255,0.15)'}`,
+        style: `width:6px;height:6px;border-radius:50%;background:${i < current ? '#4dd0e1' : 'rgba(255,255,255,0.15)'}`,
       }));
     }
     row.append(dots);
@@ -1024,12 +1024,12 @@ const AppPermissionManager = (() => {
 
     const textCol = el('div');
     textCol.append(el('h3', {
-      style: 'color:#e6edf3;font-size:15px;margin:0 0 2px;',
+      style: 'color:var(--text-primary,#e8e8e8);font-size:15px;margin:0 0 2px;',
       text : label,
     }));
-    const requestedBy = el('p', { style: 'color:#8b949e;font-size:12px;margin:0;' });
+    const requestedBy = el('p', { style: 'color:var(--text-secondary,#a0a0a0);font-size:12px;margin:0;' });
     requestedBy.append(document.createTextNode('Requested by '));
-    requestedBy.append(el('strong', { style: 'color:#c9d1d9', text: appName }));
+    requestedBy.append(el('strong', { style: 'color:var(--text-primary,#e8e8e8)', text: appName }));
     textCol.append(requestedBy);
     row.append(textCol);
     return row;
@@ -1037,7 +1037,7 @@ const AppPermissionManager = (() => {
 
   function buildReasonBlock(reason, riskColor) {
     return el('p', {
-      style: `color:#8b949e;font-size:13px;margin:0 0 14px;padding:10px 12px;background:rgba(255,255,255,0.04);border-radius:8px;border-left:3px solid ${riskColor}40;`,
+      style: `color:var(--text-secondary,#a0a0a0);font-size:13px;margin:0 0 14px;padding:10px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border-left:3px solid ${riskColor}40;`,
       text : reason,
     });
   }
@@ -1048,37 +1048,37 @@ const AppPermissionManager = (() => {
   // the absence reads as information, not as a rendering gap.
   function buildNoReasonBlock() {
     return el('p', {
-      style: 'color:#6e7681;font-size:12px;font-style:italic;margin:0 0 14px;padding:10px 12px;background:rgba(255,255,255,0.02);border-radius:8px;border-left:3px solid rgba(255,255,255,0.12);',
+      style: 'color:#8a8a8a;font-size:12px;font-style:italic;margin:0 0 14px;padding:10px 12px;background:rgba(255,255,255,0.025);border-radius:10px;border-left:3px solid rgba(255,255,255,0.12);',
       text : 'This app declared no reason why it needs this permission.',
     });
   }
 
   function buildRiskRow({ riskLevel, riskColor, category }) {
     const row = el('div', {
-      style: 'display:flex;align-items:center;gap:8px;margin-bottom:18px;padding:10px 12px;background:rgba(255,255,255,0.04);border-radius:8px;',
+      style: 'display:flex;align-items:center;gap:8px;margin-bottom:18px;padding:10px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.04);border-radius:10px;',
     });
     row.append(el('span', {
-      style: 'font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.05em;',
+      style: 'font-size:11px;color:var(--text-secondary,#a0a0a0);text-transform:uppercase;letter-spacing:.05em;',
       text : 'Risk',
     }));
     row.append(el('span', {
       style: `font-size:12px;font-weight:600;color:${riskColor};`,
       text : riskLevel.toUpperCase(),
     }));
-    row.append(el('span', { style: 'color:rgba(255,255,255,0.15);margin:0 2px;', text: '·' }));
-    row.append(el('span', { style: 'font-size:12px;color:#8b949e;', text: category }));
+    row.append(el('span', { style: 'color:rgba(255,255,255,0.2);margin:0 2px;', text: '·' }));
+    row.append(el('span', { style: 'font-size:12px;color:var(--text-secondary,#a0a0a0);', text: category }));
     return row;
   }
 
   function buildButtonRow() {
     const row = el('div', { style: 'display:flex;gap:10px;' });
     const denyBtn = el('button', {
-      style: 'flex:1;padding:11px 16px;border:1px solid rgba(255,255,255,0.12);border-radius:9px;background:transparent;color:#8b949e;font-size:14px;cursor:pointer;transition:border-color .15s,color .15s;',
+      style: 'flex:1;padding:11px 16px;border:1px solid var(--border-default,rgba(255,255,255,0.14));border-radius:10px;background:transparent;color:var(--text-secondary,#a0a0a0);font-size:14px;cursor:pointer;transition:border-color .15s,color .15s,background .15s;',
       text : 'Deny',
       attrs: { type: 'button', 'data-action': 'deny' },
     });
     const grantBtn = el('button', {
-      style: 'flex:1;padding:11px 16px;border:none;border-radius:9px;background:#58a6ff;color:#0d1117;font-size:14px;font-weight:700;cursor:pointer;transition:background .15s;',
+      style: 'flex:1;padding:11px 16px;border:1px solid var(--accent,#4dd0e1);border-radius:10px;background:var(--accent,#4dd0e1);color:#082024;font-size:14px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s;',
       text : 'Allow',
       attrs: { type: 'button', 'data-action': 'grant' },
     });
@@ -1107,7 +1107,7 @@ const AppPermissionManager = (() => {
       });
 
       const card = el('div', {
-        style: `background:#0e121c;border:1px solid ${isRootRequest ? '#f85149' : 'rgba(255,255,255,0.1)'};border-radius:14px;padding:24px;max-width:460px;width:90%;box-shadow:0 32px 80px rgba(0,0,0,0.7);animation:_apm_fadein 0.18s ease;`,
+        style: `background:var(--bg-elevated,#1a1a1a);border:1px solid ${isRootRequest ? '#ef5350' : 'var(--border-default,rgba(255,255,255,0.14))'};border-radius:18px;padding:26px;max-width:460px;width:90%;box-shadow:0 24px 72px rgba(0,0,0,0.62);animation:_apm_fadein 0.18s ease;`,
       });
 
       if (total > 1) card.append(buildPagerRow(current, total));
@@ -1121,15 +1121,15 @@ const AppPermissionManager = (() => {
       const { row: buttonRow, denyBtn, grantBtn } = buildButtonRow();
       if (isRootRequest) {
         const warning = el('div', {
-          style: 'border:1px solid rgba(248,81,73,.45);background:rgba(248,81,73,.09);border-radius:10px;padding:14px;margin:0 0 16px;',
+          style: 'border:1px solid rgba(239,83,80,.45);background:rgba(239,83,80,.09);border-radius:12px;padding:14px;margin:0 0 16px;',
         });
         warning.append(
           el('strong', {
-            style: 'display:block;color:#ff7b72;font-size:14px;margin-bottom:8px;',
+            style: 'display:block;color:#ff8a80;font-size:14px;margin-bottom:8px;',
             text: 'This app will run inside the OS, not in its sandbox.',
           }),
           el('p', {
-            style: 'color:#e6edf3;font-size:12px;line-height:1.55;margin:0 0 12px;',
+            style: 'color:var(--text-primary,#e8e8e8);font-size:12px;line-height:1.55;margin:0 0 12px;',
             text: `${appName} may read or change OS data, manipulate system UI, and access host-page APIs. Root API calls are recorded, but direct JavaScript and browser activity cannot be completely observed.`,
           })
         );
@@ -1142,7 +1142,7 @@ const AppPermissionManager = (() => {
         warning.appendChild(acknowledgement);
         grantBtn.disabled = true;
         grantBtn.textContent = 'Grant Root Access';
-        grantBtn.style.cssText = 'flex:1;padding:11px 16px;border:none;border-radius:9px;background:#b42318;color:#fff;font-size:14px;font-weight:700;opacity:.65;cursor:not-allowed;';
+        grantBtn.style.cssText = 'flex:1;padding:11px 16px;border:1px solid #ef5350;border-radius:10px;background:#ef5350;color:#1b0808;font-size:14px;font-weight:700;opacity:.65;cursor:not-allowed;';
         checkbox.addEventListener('change', () => {
           grantBtn.disabled = !checkbox.checked;
           grantBtn.style.opacity = checkbox.checked ? '1' : '.65';
@@ -1183,18 +1183,18 @@ const AppPermissionManager = (() => {
       grantBtn.addEventListener('click', () => settle(true), { signal: controller.signal });
 
       denyBtn.addEventListener('mouseenter', () => {
-        denyBtn.style.borderColor = '#58a6ff';
-        denyBtn.style.color = '#58a6ff';
+        denyBtn.style.borderColor = '#4dd0e1';
+        denyBtn.style.color = '#4dd0e1';
       }, { signal: controller.signal });
       denyBtn.addEventListener('mouseleave', () => {
         denyBtn.style.borderColor = 'rgba(255,255,255,0.12)';
-        denyBtn.style.color = '#8b949e';
+        denyBtn.style.color = 'var(--text-secondary,#a0a0a0)';
       }, { signal: controller.signal });
       grantBtn.addEventListener('mouseenter', () => {
-        grantBtn.style.background = isRootRequest ? '#da3633' : '#79b8ff';
+        grantBtn.style.background = isRootRequest ? '#ff8a80' : '#80deea';
       }, { signal: controller.signal });
       grantBtn.addEventListener('mouseleave', () => {
-        grantBtn.style.background = isRootRequest ? '#b42318' : '#58a6ff';
+        grantBtn.style.background = isRootRequest ? '#ef5350' : '#4dd0e1';
       }, { signal: controller.signal });
 
       // Keyboard: Enter = grant, Escape = deny. Bound to document (not the

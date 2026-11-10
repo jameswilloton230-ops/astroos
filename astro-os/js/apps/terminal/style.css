@@ -87,20 +87,20 @@
   }
 
   /* ANSI-like colour classes emitted by the shell's syntax highlighter. */
-  .shell-green   { color: #3fb950; }
-  .shell-blue    { color: #58a6ff; }
-  .shell-red     { color: #f85149; }
-  .shell-yellow  { color: #d29922; }
-  .shell-cyan    { color: #56d4dd; }
+  .shell-green   { color: #66bb6a; }
+  .shell-blue    { color: var(--accent); }
+  .shell-red     { color: #ef5350; }
+  .shell-yellow  { color: #ffa726; }
+  .shell-cyan    { color: var(--accent-hover); }
   .shell-magenta { color: #bc8cff; }
   .shell-bold    { font-weight: 700; }
   .shell-dim     { opacity: 0.6; }
-  .shell-cmd     { color: #58a6ff; font-weight: 600; }
-  .shell-flag    { color: #d29922; }
-  .shell-string  { color: #a5d6ff; }
-  .shell-var     { color: #ff7b72; }
-  .shell-pipe    { color: #f85149; font-weight: 700; }
-  .shell-operator{ color: #f85149; font-weight: 700; }
+  .shell-cmd     { color: var(--accent); font-weight: 600; }
+  .shell-flag    { color: #ffa726; }
+  .shell-string  { color: #a5d6a7; }
+  .shell-var     { color: #ff8a80; }
+  .shell-pipe    { color: #ef5350; font-weight: 700; }
+  .shell-operator{ color: #ef5350; font-weight: 700; }
   .shell-path    { color: #79c0ff; }
   .shell-number  { color: #79c0ff; }
 }

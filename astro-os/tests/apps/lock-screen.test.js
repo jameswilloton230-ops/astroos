@@ -5,10 +5,12 @@ import { loadServiceApp, settle } from '../helpers/app-harness.js';
 
 const LOCK_SCREEN_MARKUP = `
   <div id="lock-screen">
-    <div id="lock-username"></div>
-    <div id="lock-pin-dots"></div>
-    <div id="lock-status"></div>
-    <div id="lock-numpad"></div>
+    <div class="lock-panel">
+      <div id="lock-username"></div>
+      <div id="lock-pin-dots"></div>
+      <div id="lock-status"></div>
+      <div id="lock-numpad"></div>
+    </div>
   </div>`;
 
 // Module state (enteredPin etc.) lives per jsdom realm, so every test loads a

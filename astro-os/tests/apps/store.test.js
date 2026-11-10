@@ -110,6 +110,8 @@ describe("'Store' app (js/apps/store)", () => {
 
   it('renders the browse view: category bar, featured hero and app cards', async () => {
     const { content } = await loadStore();
+    expect(content.querySelector('.store-title').textContent).toBe('NovaByte');
+    expect(content.querySelector('.store-brand-subtitle').textContent).toBe('Store');
     // Category bar: Explore + sorted catalog categories with counts.
     const bar = content.querySelector('.category-bar');
     const labels = [...bar.querySelectorAll('button')].map((b) => b.textContent);

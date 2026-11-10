@@ -477,6 +477,11 @@ describe('AppPermissionManager — declared permission reasons', () => {
       const promise = APM.requestPermission('net:external', 'manifest-app');
       await Promise.resolve();
       expect(reasonBlocks().some((n) => n.textContent === 'Calls the app\u2019s own API.')).toBe(true);
+      const card = createdElements.find((n) => n.tagName === 'DIV' &&
+        n.style.cssText?.includes('var(--bg-elevated,#1a1a1a)'));
+      const grantBtn = createdElements.find((n) => n.tagName === 'BUTTON' && n.textContent === 'Allow');
+      expect(card.style.cssText).toContain('var(--border-default');
+      expect(grantBtn.style.cssText).toContain('var(--accent,#4dd0e1)');
 
       clickAllow();
       expect(await promise).toBe(true);

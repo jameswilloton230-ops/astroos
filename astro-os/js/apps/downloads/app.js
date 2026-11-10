@@ -61,7 +61,7 @@ registerApp({
     // FIX #9 #14: closed set of known statuses — unknown values fall back to
     // 'done' without touching external strings; frozen singletons = zero allocs.
     const STATUS = Object.freeze({
-      downloading: Object.freeze({ bg: 'rgba(88,166,255,0.14)', color: 'var(--accent)' }),
+      downloading: Object.freeze({ bg: 'rgba(77,208,225,0.14)', color: 'var(--accent)' }),
       failed:      Object.freeze({ bg: 'rgba(248,81,73,0.14)',  color: 'var(--text-danger)' }),
       done:        Object.freeze({ bg: 'rgba(63,185,80,0.14)',  color: 'var(--text-success)' }),
     });

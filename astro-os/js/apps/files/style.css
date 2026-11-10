@@ -448,23 +448,23 @@
 }
 
 .vault-tag-red {
- background: rgba(248, 81, 73, 0.2);  color: #f85149; 
+ background: rgba(239, 83, 80, 0.2);  color: #ef5350;
 }
 
 .vault-tag-orange {
- background: rgba(210, 153, 34, 0.2); color: #d29922; 
+ background: rgba(255, 167, 38, 0.2); color: #ffa726;
 }
 
 .vault-tag-yellow {
- background: rgba(210, 153, 34, 0.15);color: #e3b341; 
+ background: rgba(255, 167, 38, 0.15);color: #ffb74d;
 }
 
 .vault-tag-green {
- background: rgba(63, 185, 80, 0.2);  color: #3fb950; 
+ background: rgba(102, 187, 106, 0.2);  color: #66bb6a;
 }
 
 .vault-tag-blue {
- background: rgba(88, 166, 255, 0.2); color: #58a6ff; 
+ background: rgba(77, 208, 225, 0.2); color: #4dd0e1;
 }
 
 .vault-tag-purple {
