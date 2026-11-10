@@ -1,0 +1,343 @@
+#!/bin/sh
+# NBOSP recovery environment.
+#
+# Started by /etc/init.d/S99nbosp instead of the kiosk when recovery is
+# requested (kernel cmdline nbosp.recovery=1, or the one-shot request file
+# written by Settings / the boot watchdog). Runs as root on VT1 with the
+# normal system up (filesystems mounted, udev, network) but no compositor and
+# no NW.js, so nothing is holding the user profile open.
+#
+# Plain POSIX sh + busybox/util-linux only; no web UI involved.
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+HOME_DIR=/home/nbosp
+PROFILE=$HOME_DIR/.config/novabyte
+KIOSK_INIT=/etc/init.d/S99nbosp
+MNT=/mnt/nbosp-recovery
+TMP=/tmp/nbosp-recovery.$$
+
+mkdir -p "$TMP" "$MNT"
+
+cleanup() {
+  umount "$MNT" 2>/dev/null
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
+# A handled signal reverts to default in child processes, so Ctrl-C still
+# works inside the root shell and fsck but never kills the menu itself.
+trap 'printf "\n"' INT
+
+# ── tiny UI helpers ────────────────────────────────────────────────────
+cls()   { printf '\033[2J\033[H'; }
+say()   { printf '%s\n' "$*"; }
+warn()  { printf '\033[33m%s\033[0m\n' "$*"; }
+err()   { printf '\033[31m%s\033[0m\n' "$*"; }
+ok()    { printf '\033[32m%s\033[0m\n' "$*"; }
+
+# ask PROMPT -> $REPLY (trimmed). Exits the menu if stdin is gone so we
+# never spin on a dead terminal.
+ask() {
+  printf '%s' "$1"
+  if ! IFS= read -r REPLY; then
+    sleep 1
+    REPLY=
+    return 1
+  fi
+  REPLY=$(printf '%s' "$REPLY" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+}
+
+pause() { ask "Press Enter to continue..." >/dev/null; }
+
+# confirm_word WORD PROMPT: destructive actions need the word typed out.
+confirm_word() {
+  ask "$2 Type $1 to confirm: " || return 1
+  [ "$REPLY" = "$1" ]
+}
+
+# ── kiosk launch ───────────────────────────────────────────────────────
+# Hand over to the normal boot path after this recovery shell releases VT1.
+# Do not use start-stop-daemon --exec /bin/sh here: it sees this recovery
+# script's own interpreter and incorrectly reports that /bin/sh is running.
+launch_kiosk() {
+  cls
+  say "Starting NovaByte..."
+  (
+    sleep 1
+    NBOSP_RECOVERY_DONE=1 "$KIOSK_INIT" start
+  ) </dev/null >/dev/null 2>&1 &
+  exit 0
+}
+
+# ── actions ────────────────────────────────────────────────────────────
+do_safe_mode() {
+  mkdir -p "$PROFILE"
+  : > "$PROFILE/safe-mode"
+  chown nbosp:nbosp "$HOME_DIR/.config" "$PROFILE" "$PROFILE/safe-mode" 2>/dev/null
+  say "Safe mode will be used for this boot (minimal startup, default settings)."
+  sleep 1
+  launch_kiosk
+}
+
+do_clear_cache() {
+  say "Clearing browser caches and temp data..."
+  for d in \
+    "$PROFILE/Default/Cache" \
+    "$PROFILE/Default/Code Cache" \
+    "$PROFILE/Default/GPUCache" \
+    "$PROFILE/Default/DawnCache" \
+    "$PROFILE/Default/Service Worker/CacheStorage" \
+    "$PROFILE/GrShaderCache" \
+    "$PROFILE/ShaderCache" \
+    "$PROFILE/GraphiteDawnCache"
+  do
+    [ -e "$d" ] && rm -rf "$d" && say "  removed ${d#"$PROFILE"/}"
+  done
+  ok "Done. Files, settings and installed apps were not touched."
+  pause
+}
+
+do_reset_settings() {
+  warn "This resets NovaByte settings and keyboard layout to defaults."
+  warn "Your files and installed apps are kept."
+  confirm_word RESET "Reset settings?" || { say "Cancelled."; pause; return; }
+  rm -f "$PROFILE/settings.json" "$PROFILE/display-scale" "$PROFILE/keyboard-layout"
+  ok "Settings reset."
+  pause
+}
+
+# Lists mountable partitions into $TMP/devs ("path size fstype"), prints a
+# numbered menu. The device holding / is left out.
+list_devices() {
+  rootdev=$(lsblk -nrpo NAME,MOUNTPOINT 2>/dev/null | awk '$2=="/"{print $1; exit}')
+  lsblk -nrpo NAME,SIZE,FSTYPE 2>/dev/null \
+    | awk -v r="$rootdev" 'NF==3 && $1!=r && $3!="swap" && $3!="crypto_LUKS"' > "$TMP/devs"
+  if [ ! -s "$TMP/devs" ]; then
+    return 1
+  fi
+  awk '{printf "  %d) %s  %s  %s\n", NR, $1, $2, $3}' "$TMP/devs"
+}
+
+# pick_device -> sets DEV; mounts it (rw) at $MNT unless already mounted and
+# sets DEST to the directory to use.
+pick_device() {
+  say "Storage devices:"
+  if ! list_devices; then
+    err "No external or secondary partitions found. Plug in a USB drive and try again."
+    return 1
+  fi
+  ask "Choose a device number (blank to cancel): " || return 1
+  [ -n "$REPLY" ] || return 1
+  case "$REPLY" in *[!0-9]*) err "Not a number."; return 1;; esac
+  DEV=$(awk -v n="$REPLY" 'NR==n{print $1}' "$TMP/devs")
+  [ -n "$DEV" ] || { err "No such device."; return 1; }
+
+  existing=$(awk -v d="$DEV" '$1==d{print $2; exit}' /proc/mounts)
+  if [ -n "$existing" ]; then
+    DEST=$existing
+    MOUNTED_BY_US=
+  else
+    if ! mount "$DEV" "$MNT" 2>"$TMP/mounterr"; then
+      err "Could not mount $DEV: $(cat "$TMP/mounterr")"
+      return 1
+    fi
+    DEST=$MNT
+    MOUNTED_BY_US=1
+  fi
+  return 0
+}
+
+release_device() {
+  sync
+  [ -n "$MOUNTED_BY_US" ] && umount "$MNT" 2>/dev/null
+  MOUNTED_BY_US=
+}
+
+do_backup() {
+  cls
+  say "Back up user data (/home/nbosp: files, settings, app data) to a drive."
+  say
+  pick_device || { pause; return; }
+  out="$DEST/nbosp-backup-$(date +%Y%m%d-%H%M%S).tar.gz"
+  say "Writing $out ..."
+  if tar -czf "$out" -C / home/nbosp 2>"$TMP/tarerr"; then
+    sync
+    ok "Backup complete: $(basename "$out") ($(du -h "$out" | awk '{print $1}'))"
+  else
+    err "Backup failed: $(tail -n 3 "$TMP/tarerr")"
+    rm -f "$out"
+  fi
+  release_device
+  pause
+}
+
+do_restore() {
+  cls
+  say "Restore user data from an nbosp-backup-*.tar.gz on a drive."
+  warn "Current contents of /home/nbosp will be replaced by the backup."
+  say
+  pick_device || { pause; return; }
+
+  ls -1 "$DEST"/nbosp-backup-*.tar.gz > "$TMP/backups" 2>/dev/null
+  if [ ! -s "$TMP/backups" ]; then
+    err "No nbosp-backup-*.tar.gz files found at the top level of $DEV."
+    release_device; pause; return
+  fi
+  say "Backups:"
+  awk '{n=split($0,p,"/"); printf "  %d) %s\n", NR, p[n]}' "$TMP/backups"
+  ask "Choose a backup number (blank to cancel): "
+  [ -n "$REPLY" ] || { release_device; return; }
+  case "$REPLY" in *[!0-9]*) err "Not a number."; release_device; pause; return;; esac
+  file=$(awk -v n="$REPLY" 'NR==n{print}' "$TMP/backups")
+  [ -n "$file" ] || { err "No such backup."; release_device; pause; return; }
+
+  # Only ever extract paths under home/nbosp: refuse anything else
+  # (absolute paths, "..", or other top-level directories).
+  if ! tar -tzf "$file" > "$TMP/list" 2>/dev/null; then
+    err "That file is not a readable tar.gz archive."
+    release_device; pause; return
+  fi
+  if grep -v -E '^home/nbosp(/|$)' "$TMP/list" | grep -q . || grep -q -E '(^|/)\.\.(/|$)' "$TMP/list"; then
+    err "Archive contains paths outside home/nbosp. Refusing to restore it."
+    release_device; pause; return
+  fi
+
+  confirm_word RESTORE "Replace /home/nbosp with this backup?" || { say "Cancelled."; release_device; pause; return; }
+  find "$HOME_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} \;
+  if tar -xzf "$file" -C /; then
+    chown -R nbosp:nbosp "$HOME_DIR"
+    sync
+    ok "Restore complete."
+  else
+    err "Restore failed part-way. The profile may be incomplete; restore again or factory reset."
+  fi
+  release_device
+  pause
+}
+
+do_fsck() {
+  cls
+  say "Check the system filesystem."
+  rootdev=$(lsblk -nrpo NAME,MOUNTPOINT 2>/dev/null | awk '$2=="/"{print $1; exit}')
+  if [ -z "$rootdev" ]; then
+    warn "No disk-backed root filesystem (this looks like a live session). Nothing to check."
+    pause; return
+  fi
+  fstype=$(lsblk -nrpo NAME,FSTYPE "$rootdev" | awk '{print $2; exit}')
+  case "$fstype" in ext2|ext3|ext4) ;; *) warn "Unsupported root filesystem type '$fstype'."; pause; return;; esac
+  say "Root device: $rootdev ($fstype)"
+  sync
+  if mount -o remount,ro / 2>/dev/null; then
+    say "Root remounted read-only. Running a full check and repair..."
+    e2fsck -f -y "$rootdev"
+    rc=$?
+    mount -o remount,rw / 2>/dev/null || warn "Could not remount / read-write; reboot after this."
+    case $rc in
+      0) ok "No problems found." ;;
+      1|2|3) ok "Errors were fixed (exit $rc). A reboot is recommended." ;;
+      *) err "e2fsck reported unfixed problems (exit $rc)." ;;
+    esac
+  else
+    warn "Root is busy and could not be remounted read-only, so only a"
+    warn "read-only check is possible. Problems it reports may be false"
+    warn "alarms because the filesystem is mounted and in use."
+    e2fsck -f -n "$rootdev"
+  fi
+  pause
+}
+
+do_info() {
+  cls
+  say "== System =="
+  say "Kernel : $(uname -sr)"
+  say "Uptime : $(uptime 2>/dev/null)"
+  say
+  say "== Memory =="
+  free -m 2>/dev/null
+  say
+  say "== Disk =="
+  df -h / "$HOME_DIR" 2>/dev/null
+  say
+  say "== Network =="
+  ip -brief addr 2>/dev/null || ifconfig 2>/dev/null
+  say
+  ask "Show logs? (k = kiosk log, d = dmesg, Enter = back): "
+  case "$REPLY" in
+    k|K) tail -n 60 "$HOME_DIR/nbosp-kiosk.log" 2>/dev/null || say "(no kiosk log)"; pause ;;
+    d|D) dmesg | tail -n 60; pause ;;
+  esac
+}
+
+do_shell() {
+  cls
+  warn "Linux Terminal (running as root). Type 'exit' to return to the recovery menu."
+  say
+  HOME=/root /bin/sh -l
+}
+
+do_factory_reset() {
+  cls
+  err "FACTORY RESET"
+  say "This permanently erases everything in /home/nbosp: files, settings,"
+  say "installed apps, app data and the browser profile. The system itself"
+  say "(/opt/nbosp) is kept; nothing is repartitioned or reinstalled."
+  confirm_word ERASE "Erase all user data?" || { say "Cancelled."; pause; return; }
+  find "$HOME_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} \;
+  sync
+  ok "User data erased. Restarting..."
+  sleep 2
+  do_power restart
+}
+
+do_power() {
+  sync
+  if [ -x /usr/bin/nbosp-power ]; then
+    /usr/bin/nbosp-power "$1"
+  elif [ "$1" = restart ]; then
+    reboot -f
+  else
+    poweroff -f
+  fi
+  sleep 5
+}
+
+# ── menu ───────────────────────────────────────────────────────────────
+menu() {
+  cls
+  printf '\033[1m  NovaByte Recovery Environment\033[0m   (kernel %s)\n' "$(uname -r)"
+  say "  ------------------------------------------------------------"
+  say "   1) Continue normal boot"
+  say "   2) Boot in safe mode"
+  say "   3) Clear caches and temp data"
+  say "   4) Reset settings to defaults"
+  say "   5) Back up user data to a drive"
+  say "   6) Restore user data from a backup"
+  say "   7) Check system filesystem"
+  say "   8) System information and logs"
+  say "   9) Linux Terminal"
+  say "   f) Factory reset (erase all user data)"
+  say "   r) Restart        p) Power off"
+  say
+}
+
+while :; do
+  menu
+  ask "  Select an option: " || continue
+  case "$REPLY" in
+    1) launch_kiosk ;;
+    2) do_safe_mode ;;
+    3) do_clear_cache ;;
+    4) do_reset_settings ;;
+    5) do_backup ;;
+    6) do_restore ;;
+    7) do_fsck ;;
+    8) do_info ;;
+    9) do_shell ;;
+    f|F) do_factory_reset ;;
+    r|R) do_power restart ;;
+    p|P) do_power poweroff ;;
+    '') ;;
+    *) err "Unknown option."; sleep 1 ;;
+  esac
+done

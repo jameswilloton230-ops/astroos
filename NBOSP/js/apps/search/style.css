@@ -1,0 +1,4 @@
+/* Search uses shared UI primitives; keep its content area constrained. */
+@layer apps {
+  .app-window[data-app-id="com.nbosp.search"] .window-content { min-width: 0; min-height: 0; overflow: hidden; }
+}

@@ -1,0 +1,60 @@
+#!/bin/sh
+# Runs the per-user VMware tools (drag and drop, shared clipboard) inside the
+# kiosk session. Started from /run/nbosp-kiosk-session.sh, so DISPLAY and the
+# nbosp user come from there.
+#
+# These plugins are X11 clients. The session exports GDK_BACKEND=wayland for
+# NW.js, so it is overridden here. cage starts Xwayland lazily, so wait for it
+# rather than being the client that triggers its startup.
+
+# The session points LD_LIBRARY_PATH at NW.js's bundled libraries, including
+# its own libEGL and libGLESv2. Everything started here must use the system ones.
+unset LD_LIBRARY_PATH
+
+LOG=/home/nbosp/vmusr.log
+PLUGIN_DIR=/usr/lib/open-vm-tools/plugins/vmusr
+
+/usr/bin/vmware-checkvm >/dev/null 2>&1 || exit 0
+ls "$PLUGIN_DIR"/*.so >/dev/null 2>&1 || exit 0
+
+: >"$LOG"
+if [ -z "$DISPLAY" ]; then
+	echo "nbosp-vmusr: DISPLAY is not set, nothing to attach to" >>"$LOG"
+	exit 1
+fi
+
+xwayland_up() {
+	for d in /proc/[0-9]*; do
+		[ "$(cat "$d/comm" 2>/dev/null)" = Xwayland ] && return 0
+	done
+	return 1
+}
+
+tries=0
+until xwayland_up; do
+	tries=$((tries + 1))
+	if [ "$tries" -ge 60 ]; then
+		echo "nbosp-vmusr: Xwayland never started" >>"$LOG"
+		exit 1
+	fi
+	sleep 2
+done
+
+export GDK_BACKEND=x11
+quick_exits=0
+while :; do
+	started=$(date +%s)
+	/usr/bin/vmtoolsd -n vmusr >>"$LOG" 2>&1
+	# vmtoolsd exits when the X connection drops. Give up if it keeps dying
+	# straight away so a broken setup does not spin forever.
+	if [ $(($(date +%s) - started)) -lt 10 ]; then
+		quick_exits=$((quick_exits + 1))
+	else
+		quick_exits=0
+	fi
+	if [ "$quick_exits" -ge 5 ]; then
+		echo "nbosp-vmusr: vmtoolsd keeps exiting, giving up" >>"$LOG"
+		exit 1
+	fi
+	sleep 5
+done

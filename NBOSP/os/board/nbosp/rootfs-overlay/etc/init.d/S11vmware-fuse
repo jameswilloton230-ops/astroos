@@ -1,0 +1,50 @@
+#!/bin/sh
+# Mounts VMware shared folders at /mnt/hgfs, plus the vmblock filesystem that
+# drag and drop uses to hold files back while a transfer is in progress.
+# Outside VMware this does nothing. A host with shared folders switched off
+# makes vmhgfs-fuse fail; that is logged and boot carries on.
+
+HGFS_MNT=/mnt/hgfs
+VMBLOCK_MNT=/run/vmblock-fuse
+LOG=/var/log/vmware-fuse.log
+
+mounted() {
+	grep -q " $1 " /proc/mounts
+}
+
+start() {
+	printf 'Starting VMware FUSE mounts: '
+	if ! /usr/bin/vmware-checkvm >/dev/null 2>&1; then
+		echo "skipped (not running in VMware)"
+		return 0
+	fi
+	mkdir -p "$HGFS_MNT" "$VMBLOCK_MNT"
+	# Backgrounded because busybox here has no timeout and a stuck host RPC
+	# must not hold up boot. uid/gid 1000 is the nbosp user (users.table).
+	(
+		mounted "$HGFS_MNT" || /usr/bin/vmhgfs-fuse .host:/ "$HGFS_MNT" \
+			-o subtype=vmhgfs-fuse,allow_other,uid=1000,gid=1000
+		mounted "$VMBLOCK_MNT" || /usr/bin/vmware-vmblock-fuse "$VMBLOCK_MNT" \
+			-o subtype=vmware-vmblock,default_permissions,allow_other
+	) >"$LOG" 2>&1 &
+	echo "OK"
+}
+
+stop() {
+	printf 'Stopping VMware FUSE mounts: '
+	for m in "$HGFS_MNT" "$VMBLOCK_MNT"; do
+		mounted "$m" && umount "$m" 2>/dev/null
+	done
+	echo "OK"
+}
+
+case "$1" in
+	start|stop)
+		"$1";;
+	restart|reload)
+		stop
+		start;;
+	*)
+		echo "Usage: $0 {start|stop|restart|reload}"
+		exit 1
+esac

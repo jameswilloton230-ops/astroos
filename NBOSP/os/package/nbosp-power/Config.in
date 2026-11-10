@@ -1,0 +1,5 @@
+config BR2_PACKAGE_NBOSP_POWER
+	bool "NBOSP restricted power helper"
+	depends on BR2_x86_64
+	help
+	  Install a small setuid helper that permits only reboot and power-off.

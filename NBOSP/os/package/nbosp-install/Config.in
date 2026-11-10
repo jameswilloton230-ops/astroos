@@ -1,0 +1,15 @@
+config BR2_PACKAGE_NBOSP_INSTALL
+	bool "NBOSP disk installer helper"
+	depends on BR2_x86_64
+	select BR2_PACKAGE_DOSFSTOOLS
+	select BR2_PACKAGE_DOSFSTOOLS_MKFS_FAT
+	select BR2_PACKAGE_E2FSPROGS
+	select BR2_TARGET_GRUB2
+	select BR2_TARGET_GRUB2_I386_PC
+	select BR2_TARGET_GRUB2_X86_64_EFI
+	select BR2_TARGET_GRUB2_INSTALL_TOOLS
+	select BR2_PACKAGE_UTIL_LINUX
+	select BR2_PACKAGE_UTIL_LINUX_BINARIES
+	help
+	  Install a narrow setuid helper and root-owned script for installing
+	  NBOSP to a selected disk. The installer repartitions and erases it.

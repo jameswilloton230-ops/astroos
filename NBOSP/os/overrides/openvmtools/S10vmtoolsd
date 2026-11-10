@@ -1,0 +1,86 @@
+#!/bin/sh
+#
+# Starts vmtoolsd for openvmtools
+#
+
+DAEMON="vmtoolsd"
+PIDFILE="/var/run/$DAEMON.pid"
+
+VMTOOLSD_ARGS="-b"
+
+# shellcheck source=/dev/null
+[ -r "/etc/default/$DAEMON" ] && . "/etc/default/$DAEMON"
+
+wait_for_vmware_drm() {
+	if ! /usr/bin/vmware-checkvm >/dev/null 2>&1; then
+		return 0
+	fi
+
+	# resolutionKMS probes DRM once when vmtoolsd loads, so let udev finish first.
+	if command -v udevadm >/dev/null 2>&1; then
+		udevadm settle --timeout=30 || return 1
+	fi
+
+	attempt=0
+	while [ "$attempt" -lt 30 ]; do
+		for card in /sys/class/drm/card[0-9]*; do
+			[ -e "$card/device/driver" ] || continue
+			[ "$(basename "$(readlink -f "$card/device/driver")")" = vmwgfx ] || continue
+			[ -c "/dev/dri/${card##*/}" ] || continue
+			return 0
+		done
+		sleep 1
+		attempt=$((attempt + 1))
+	done
+
+	echo "VMware DRM device did not become ready; vmtoolsd resolution KMS was not started." >&2
+	return 1
+}
+
+start() {
+	printf 'Starting %s: ' "$DAEMON"
+	if ! wait_for_vmware_drm; then
+		echo "FAIL"
+		return 1
+	fi
+	# shellcheck disable=SC2086 # we need the word splitting
+	start-stop-daemon -S -q -p "$PIDFILE" -x "/usr/bin/$DAEMON" \
+		-- $VMTOOLSD_ARGS "$PIDFILE"
+	status=$?
+	if [ "$status" -eq 0 ]; then
+		echo "OK"
+	else
+		echo "FAIL"
+	fi
+	return "$status"
+}
+
+stop() {
+	printf 'Stopping %s: ' "$DAEMON"
+	start-stop-daemon -K -q -p "$PIDFILE"
+	status=$?
+	if [ "$status" -eq 0 ]; then
+		rm -f "$PIDFILE"
+		echo "OK"
+	else
+		echo "FAIL"
+	fi
+	return "$status"
+}
+
+restart() {
+	stop
+	sleep 1
+	start
+}
+
+case "$1" in
+	start|stop|restart)
+		"$1";;
+	reload)
+		# Restart, since there is no true "reload" feature.
+		restart;;
+	*)
+		echo "Usage: $0 {start|stop|restart|reload}"
+		exit 1
+esac

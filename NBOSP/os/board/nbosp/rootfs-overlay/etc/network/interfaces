@@ -1,0 +1,3 @@
+# Managed by NetworkManager — do not add interfaces here
+auto lo
+iface lo inet loopback

@@ -1,0 +1,20 @@
+From: NBOSP <nbosp@localhost>
+Subject: [PATCH] Enable wlroots debug logging at runtime via CAGE_DEBUG
+
+Release builds of Cage hard-code WLR_ERROR, which hides renderer selection,
+dmabuf format and Xwayland startup messages. Honour CAGE_DEBUG so the NBOSP
+GL debug mode can turn debug logging on without a debug build.
+---
+diff --git a/cage.c b/cage.c
+index 26ab9ef..8cd5a9f 100644
+--- a/cage.c
++++ b/cage.c
+@@ -291,7 +291,7 @@ main(int argc, char *argv[])
+ #ifdef DEBUG
+ 	wlr_log_init(WLR_DEBUG, NULL);
+ #else
+-	wlr_log_init(WLR_ERROR, NULL);
++	wlr_log_init(getenv("CAGE_DEBUG") != NULL ? WLR_DEBUG : WLR_ERROR, NULL);
+ #endif
+ 
+ 	/* Wayland requires XDG_RUNTIME_DIR to be set. */

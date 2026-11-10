@@ -1,0 +1,38 @@
+{
+  "id": "com.nbosp.textedit",
+  "name": "TextEdit",
+  "version": "3.0.2",
+  "author": "DirazCoder",
+  "description": "Edit plain-text files with line numbers, bracket matching, and word count.",
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "icon": "pen-tool",
+  "type": "blank",
+  "defaultSize": [
+    680,
+    500
+  ],
+  "minSize": [
+    360,
+    260
+  ],
+  "resizable": true,
+  "frame": true,
+  "categories": [
+    "utilities",
+    "productivity"
+  ],
+  "system": true,
+  "handles": {
+    "protocols": [],
+    "extensions": [
+      ".txt",
+      ".md",
+      ".json",
+      ".js",
+      ".css",
+      ".log"
+    ]
+  },
+  "transparent": true
+}

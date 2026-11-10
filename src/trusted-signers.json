@@ -1,0 +1,12 @@
+[
+  {
+    "id": "novabyte-trusted-signing-v1",
+    "name": "NovaByte Trusted Signing",
+    "method": "ed25519",
+    "publicKey": {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "x": "Id_PakcUqjCM2k3i7mSkQy7LadrM_PwVz9S1ikYAzEY"
+    }
+  }
+]

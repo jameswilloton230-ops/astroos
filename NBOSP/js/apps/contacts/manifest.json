@@ -1,0 +1,26 @@
+{
+  "id": "com.nbosp.contacts",
+  "name": "Contacts",
+  "version": "3.0.2",
+  "author": "DirazCoder",
+  "description": "Save and organize your contacts in one place.",
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "icon": "users",
+  "type": "blank",
+  "defaultSize": [
+    640,
+    500
+  ],
+  "minSize": [
+    440,
+    320
+  ],
+  "resizable": true,
+  "frame": true,
+  "categories": [
+    "utilities"
+  ],
+  "system": true,
+  "transparent": true
+}

@@ -1,0 +1,139 @@
+From: NBOSP <nbosp@localhost>
+Subject: [PATCH] Track XWayland override-redirect window positions
+
+Backport of cage PR #283 (djpohly), unmerged upstream, adapted to 0.2.0.
+
+X11 popup windows (Chromium right-click menus, <select> dropdowns,
+tooltips) are override-redirect windows that map first and then move
+themselves to the anchored position. Cage copied x/y into view->lx/ly
+once at map time and never listened for later geometry changes, so any
+popup that repositioned after mapping stayed at its initial spot - the
+top-left of the screen. NW.js runs through XWayland in the NBOSP kiosk,
+so every native Chromium menu and dropdown landed there.
+
+Populate lx/ly at view creation, listen for wlroots set_geometry on
+override-redirect surfaces and move the scene node, skip
+maximize/center positioning for such windows, and reset scene_tree on
+unmap so a late set_geometry cannot touch a destroyed node.
+
+Fixes dropdown/context-menu placement for XWayland clients (cage
+issues #228/#283).
+---
+diff --git a/view.c b/view.c
+--- a/view.c
++++ b/view.c
+@@ -94,6 +94,17 @@ view_position(struct cg_view *view)
+ 	struct wlr_box layout_box;
+ 	wlr_output_layout_get_box(view->server->output_layout, NULL, &layout_box);
+ 
++#if CAGE_HAS_XWAYLAND
++	/* We shouldn't position override-redirect windows. They set
++	   their own (x,y) coordinates in handle_xwayland_surface_set_geometry. */
++	if (view->type == CAGE_XWAYLAND_VIEW && !xwayland_view_should_manage(view)) {
++		/* The scene is created in .map, but .set_geometry can come
++		 * before that. */
++		if (view->scene_tree != NULL) {
++			wlr_scene_node_set_position(&view->scene_tree->node, view->lx, view->ly);
++		}
++	} else
++#endif
+ 	if (view_is_primary(view) || view_extends_output_layout(view, &layout_box)) {
+ 		view_maximize(view, &layout_box);
+ 	} else {
+@@ -116,6 +127,7 @@ view_unmap(struct cg_view *view)
+ 	wl_list_remove(&view->link);
+ 
+ 	wlr_scene_node_destroy(&view->scene_tree->node);
++	view->scene_tree = NULL;
+ 
+ 	view->wlr_surface->data = NULL;
+ 	view->wlr_surface = NULL;
+@@ -134,14 +146,7 @@ view_map(struct cg_view *view, struct wlr_surface *surface)
+ 	view->wlr_surface = surface;
+ 	surface->data = view;
+ 
+-#if CAGE_HAS_XWAYLAND
+-	/* We shouldn't position override-redirect windows. They set
+-	   their own (x,y) coordinates in handle_wayland_surface_map. */
+-	if (view->type != CAGE_XWAYLAND_VIEW || xwayland_view_should_manage(view))
+-#endif
+-	{
+-		view_position(view);
+-	}
++	view_position(view);
+ 
+ 	wl_list_insert(&view->server->views, &view->link);
+ 	seat_set_focus(view->server->seat, view);
+diff --git a/xwayland.c b/xwayland.c
+--- a/xwayland.c
++++ b/xwayland.c
+@@ -110,6 +110,22 @@ handle_xwayland_surface_request_fullscreen(struct wl_listener *listener, void *d
+ 	wlr_xwayland_surface_set_fullscreen(xwayland_view->xwayland_surface, xwayland_surface->fullscreen);
+ }
+ 
++static void
++handle_xwayland_surface_set_geometry(struct wl_listener *listener, void *data)
++{
++	struct cg_xwayland_view *xwayland_view = wl_container_of(listener, xwayland_view, set_geometry);
++	struct cg_view *view = &xwayland_view->view;
++
++	/* Override-redirect windows (X11 popup menus, dropdowns, tooltips)
++	 * position themselves. Track every geometry change so the scene node
++	 * follows the window instead of staying where it first mapped. */
++	if (!xwayland_view_should_manage(view)) {
++		view->lx = xwayland_view->xwayland_surface->x;
++		view->ly = xwayland_view->xwayland_surface->y;
++		view_position(view);
++	}
++}
++
+ static void
+ handle_xwayland_surface_unmap(struct wl_listener *listener, void *data)
+ {
+@@ -125,11 +141,6 @@ handle_xwayland_surface_map(struct wl_listener *listener, void *data)
+ 	struct cg_xwayland_view *xwayland_view = wl_container_of(listener, xwayland_view, map);
+ 	struct cg_view *view = &xwayland_view->view;
+ 
+-	if (!xwayland_view_should_manage(view)) {
+-		view->lx = xwayland_view->xwayland_surface->x;
+-		view->ly = xwayland_view->xwayland_surface->y;
+-	}
+-
+ 	view_map(view, xwayland_view->xwayland_surface->surface);
+ }
+ 
+@@ -141,6 +152,7 @@ handle_xwayland_surface_destroy(struct wl_listener *listener, void *data)
+ 
+ 	wl_list_remove(&xwayland_view->destroy.link);
+ 	wl_list_remove(&xwayland_view->request_fullscreen.link);
++	wl_list_remove(&xwayland_view->set_geometry.link);
+ 	xwayland_view->xwayland_surface = NULL;
+ 
+ 	view_destroy(view);
+@@ -190,6 +202,8 @@ handle_xwayland_surface_new(struct wl_listener *listener, void *data)
+ 
+ 	view_init(&xwayland_view->view, server, CAGE_XWAYLAND_VIEW, &xwayland_view_impl);
+ 	xwayland_view->xwayland_surface = xwayland_surface;
++	xwayland_view->view.lx = xwayland_surface->x;
++	xwayland_view->view.ly = xwayland_surface->y;
+ 
+ 	xwayland_view->associate.notify = handle_xwayland_associate;
+ 	wl_signal_add(&xwayland_surface->events.associate, &xwayland_view->associate);
+@@ -199,4 +213,6 @@ handle_xwayland_surface_new(struct wl_listener *listener, void *data)
+ 	wl_signal_add(&xwayland_surface->events.destroy, &xwayland_view->destroy);
+ 	xwayland_view->request_fullscreen.notify = handle_xwayland_surface_request_fullscreen;
+ 	wl_signal_add(&xwayland_surface->events.request_fullscreen, &xwayland_view->request_fullscreen);
++	xwayland_view->set_geometry.notify = handle_xwayland_surface_set_geometry;
++	wl_signal_add(&xwayland_surface->events.set_geometry, &xwayland_view->set_geometry);
+ }
+diff --git a/xwayland.h b/xwayland.h
+--- a/xwayland.h
++++ b/xwayland.h
+@@ -15,6 +15,7 @@ struct cg_xwayland_view {
+ 	struct wl_listener unmap;
+ 	struct wl_listener map;
+ 	struct wl_listener request_fullscreen;
++	struct wl_listener set_geometry;
+ };
+ 
+ struct cg_xwayland_view *xwayland_view_from_view(struct cg_view *view);

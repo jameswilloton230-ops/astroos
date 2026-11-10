@@ -1,0 +1,50 @@
+From: NBOSP <nbosp@localhost>
+Subject: [PATCH] xwayland: restack the focused view to the top of the X11 stack
+
+wlroots 0.17+ made XWayland stacking explicit: XWM restacks every newly
+mapped managed window BELOW the existing stack (xwm_handle_map_notify)
+and wlr_xwayland_surface_activate() only updates _NET_ACTIVE_WINDOW and
+the X input focus - it never touches the stack order. Compositors are
+expected to call wlr_xwayland_surface_restack() when they raise a view.
+Cage 0.2.0 never does, so the X11 stack order diverges from the scene.
+
+Xwayland delivers pointer events to the topmost X window under the
+cursor (X11 XYToWindow semantics), regardless of which surface the
+compositor entered. In the NBOSP kiosk every view is fullscreen at
+(0,0), so when NW.js opens its DevTools window over the desktop the
+DevTools view is drawn on top but sits at the bottom of the X11 stack:
+every click goes to the desktop window underneath and DevTools looks
+completely inert, while keyboard input (which follows the X input
+focus) works.
+
+Restack the surface to the top of the managed X11 stack whenever cage
+focuses the view (map-time and click-to-focus both go through
+seat_set_focus -> view_activate). Skip override-redirect surfaces:
+wlroots asserts on restacking them and they manage their own stacking
+(they always map above the managed windows anyway).
+
+Mirrors sway's restack-on-focus handling of the same wlroots API.
+---
+diff --git a/xwayland.c b/xwayland.c
+--- a/xwayland.c
++++ b/xwayland.c
+@@ -83,7 +83,18 @@ static void
+ activate(struct cg_view *view, bool activate)
+ {
+ 	struct cg_xwayland_view *xwayland_view = xwayland_view_from_view(view);
+-	wlr_xwayland_surface_activate(xwayland_view->xwayland_surface, activate);
++	struct wlr_xwayland_surface *xsurface = xwayland_view->xwayland_surface;
++	wlr_xwayland_surface_activate(xsurface, activate);
++
++	/* Keep the X11 stacking order in sync with the scene. Xwayland
++	 * delivers pointer events to the topmost X window under the cursor,
++	 * not to the surface with Wayland pointer focus, and XWM puts every
++	 * newly mapped managed window at the bottom of the X11 stack. Kiosk
++	 * views all cover the whole output, so unless the focused window is
++	 * raised here the views underneath keep receiving the input. */
++	if (activate && !xsurface->override_redirect) {
++		wlr_xwayland_surface_restack(xsurface, NULL, XCB_STACK_MODE_ABOVE);
++	}
+ }
+ 
+ static void

@@ -1,0 +1,27 @@
+{
+  "id": "com.nbosp.inspector",
+  "name": "Inspector",
+  "version": "3.0.2",
+  "author": "DirazCoder",
+  "description": "Inspect registered apps and currently open windows in NovaByte OS.",
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiIgd2lkdGg9Ijk0IiBoZWlnaHQ9Ijk0Ij4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iaW5zLXJpbSIgeDE9IjAiIHkxPSIwIiB4Mj0iMSIgeTI9IjEiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjNjBhNWZhIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzI1NjNlYiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iaW5zLWdsYXNzIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNlZmY2ZmYiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjYmZkYmZlIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJpbnMtaGFuZGxlIiB4MT0iMCIgeTE9IjAiIHgyPSIwIiB5Mj0iMSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNmYmJmMjQiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjZDk3NzA2Ii8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8IS0tIHNoYWRvdyAtLT4KICA8ZWxsaXBzZSBjeD0iNDgiIGN5PSI5MCIgcng9IjMwIiByeT0iNiIgZmlsbD0iIzAwMCIgb3BhY2l0eT0iMC4xOCIvPgoKICA8IS0tIGhhbmRsZSAtLT4KICA8cmVjdCB4PSI2MCIgeT0iNTgiIHdpZHRoPSIxNCIgaGVpZ2h0PSIzMCIgcng9IjYiIGZpbGw9InVybCgjaW5zLWhhbmRsZSkiIHRyYW5zZm9ybT0icm90YXRlKDQ1IDY3IDczKSIvPgoKICA8IS0tIGxlbnMgcmltIC0tPgogIDxjaXJjbGUgY3g9IjQyIiBjeT0iNDIiIHI9IjI4IiBmaWxsPSJ1cmwoI2lucy1yaW0pIi8+CiAgPCEtLSBsZW5zIGdsYXNzIC0tPgogIDxjaXJjbGUgY3g9IjQyIiBjeT0iNDIiIHI9IjIwIiBmaWxsPSJ1cmwoI2lucy1nbGFzcykiLz4KCiAgPCEtLSBzY2FuIHB1bHNlIGxpbmUgaW5zaWRlIHRoZSBnbGFzcyAtLT4KICA8cG9seWxpbmUgcG9pbnRzPSIyOCw0NCAzNSw0NCAzOSwzNCA0NSw1MiA0OSw0NCA1Niw0NCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMjU2M2ViIiBzdHJva2Utd2lkdGg9IjIuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CgogIDwhLS0gaGlnaGxpZ2h0IC0tPgogIDxlbGxpcHNlIGN4PSIzNSIgY3k9IjMwIiByeD0iMTAiIHJ5PSI1IiBmaWxsPSIjZmZmIiBvcGFjaXR5PSIwLjM1IiB0cmFuc2Zvcm09InJvdGF0ZSgtMjUgMzUgMzApIi8+Cjwvc3ZnPgo=",
+  "type": "blank",
+  "defaultSize": [
+    700,
+    550
+  ],
+  "minSize": [
+    420,
+    350
+  ],
+  "resizable": true,
+  "frame": true,
+  "category": "developer",
+  "categories": [
+    "developer"
+  ],
+  "system": true,
+  "devOnly": true
+}

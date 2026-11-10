@@ -1,0 +1,38 @@
+  <div id="desktop" role="application" aria-label="Desktop"></div>
+  <div id="selection-rect" aria-hidden="true"></div>
+  <!-- Taskbar -->
+  <div id="taskbar" role="toolbar" aria-label="Taskbar">
+    <div class="taskbar-start">
+      <button type="button" id="start-btn" name="start-btn" class="taskbar-start-btn" aria-label="Open Launchpad">
+        <svg width="26" height="26" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="tb-g" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#0a84ff"></stop>
+              <stop offset="50%" stop-color="#5e5ce6"></stop>
+              <stop offset="100%" stop-color="#bf5af2"></stop>
+            </linearGradient>
+          </defs>
+          <polygon points="40,4 68,20 68,60 40,76 12,60 12,20" fill="none" stroke="url(#tb-g)" stroke-width="3"></polygon>
+          <polygon points="40,14 60,26 60,54 40,66 20,54 20,26" fill="none" stroke="url(#tb-g)" stroke-width="1.5" opacity="0.5"></polygon>
+          <circle cx="40" cy="40" r="5.5" fill="url(#tb-g)"></circle>
+          <line x1="40" y1="4" x2="40" y2="14" stroke="url(#tb-g)" stroke-width="1.8"></line>
+          <line x1="68" y1="20" x2="60" y2="26" stroke="url(#tb-g)" stroke-width="1.8"></line>
+          <line x1="68" y1="60" x2="60" y2="54" stroke="url(#tb-g)" stroke-width="1.8"></line>
+          <line x1="40" y1="76" x2="40" y2="66" stroke="url(#tb-g)" stroke-width="1.8"></line>
+          <line x1="12" y1="60" x2="20" y2="54" stroke="url(#tb-g)" stroke-width="1.8"></line>
+          <line x1="12" y1="20" x2="20" y2="26" stroke="url(#tb-g)" stroke-width="1.8"></line>
+        </svg>
+      </button>
+    </div>
+    <div id="taskbar-apps" class="taskbar-apps" role="group" aria-label="Running applications"></div>
+    <div id="system-tray-slot"></div>
+  </div>
+  <div id="launchpad" role="dialog" aria-modal="true" aria-label="Application launcher">
+    <label class="sr-only" for="launchpad-search">Search applications</label>
+    <input type="text" id="launchpad-search" name="launchpad-search" class="launchpad-search" placeholder="Search apps..." aria-label="Search applications">
+    <div class="launchpad-grid" id="launchpad-grid" role="grid"></div>
+    <div id="launchpad-power-actions" class="launchpad-power-actions" aria-label="System power">
+      <button type="button" id="restart-system-btn" class="launchpad-power-btn">Restart</button>
+      <button type="button" id="poweroff-system-btn" class="launchpad-power-btn danger">Power off</button>
+    </div>
+  </div>

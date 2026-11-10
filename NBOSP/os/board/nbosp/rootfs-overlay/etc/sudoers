@@ -1,0 +1,10 @@
+# NovaByte OS sudo configuration (root:root 0440, see device_table.txt).
+#
+# The nbosp kiosk account runs NovaRoot's privileged broker through
+# passwordless sudo: /etc/sudoers.d/nbosp grants "nbosp ALL=(ALL) NOPASSWD: ALL".
+# The includedir below is what makes that drop-in effective — Buildroot's
+# stock sudoers file is not guaranteed to carry the directive, and without it
+# every "sudo -n" run fails with "not in the sudoers file".
+Defaults secure_path="/usr/sbin:/usr/bin:/sbin:/bin"
+
+@includedir /etc/sudoers.d

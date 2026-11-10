@@ -1,0 +1,26 @@
+{
+  "id": "com.nbosp.settings",
+  "name": "Settings",
+  "version": "3.0.2",
+  "description": "Configure NovaByte OS preferences, features, and system behavior.",
+  "author": "DirazCoder",
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "icon": "settings",
+  "type": "blank",
+  "defaultSize": [
+    700,
+    500
+  ],
+  "minSize": [
+    500,
+    400
+  ],
+  "resizable": true,
+  "frame": true,
+  "categories": [
+    "utilities"
+  ],
+  "system": true,
+  "transparent": true
+}

@@ -1,0 +1,4 @@
+/* Calculator's layout is authored in app.js; keep sizing local to its window. */
+@layer apps {
+  .app-window[data-app-id="com.nbosp.calculator"] .window-content { min-width: 0; min-height: 0; }
+}

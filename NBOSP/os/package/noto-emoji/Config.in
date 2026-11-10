@@ -1,0 +1,6 @@
+config BR2_PACKAGE_NOTO_EMOJI
+	bool "Noto Color Emoji font"
+	depends on BR2_PACKAGE_FONTCONFIG
+	help
+	  Install Google's Noto Color Emoji font for emoji rendering in NW.js and
+	  other applications using Fontconfig.

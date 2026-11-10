@@ -1,0 +1,131 @@
+.calendar-container {
+
+    display: flex;
+    height: 100%;
+  
+}
+
+.calendar-sidebar {
+
+    width: 260px;
+    border-right: 1px solid var(--border-subtle);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+  
+}
+
+.calendar-main {
+
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  
+}
+
+.calendar-cal-header {
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+  
+}
+
+.calendar-cal-header h3 {
+
+    font-size: 16px;
+    font-weight: 500;
+  
+}
+
+.calendar-cal-grid {
+
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 600px;
+  
+}
+
+.calendar-weekdays {
+
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    margin-bottom: 4px;
+  
+}
+
+.calendar-weekday {
+
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 4px;
+    text-transform: uppercase;
+  
+}
+
+.calendar-days {
+
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+  
+}
+
+.calendar-day {
+
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 4px;
+    border-radius: var(--r-xs);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background var(--t-fast);
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    min-width: 32px;
+    min-height: 32px;
+  
+}
+
+.calendar-day:hover {
+
+    background: rgba(255, 255, 255, 0.06);
+  
+}
+
+.calendar-day.today {
+
+    background: var(--accent-muted);
+    color: var(--accent);
+    font-weight: 600;
+  
+}
+
+.calendar-day.other-month {
+
+    color: var(--text-muted);
+  
+}
+
+.calendar-day-dot {
+
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    margin-top: 2px;
+  
+}

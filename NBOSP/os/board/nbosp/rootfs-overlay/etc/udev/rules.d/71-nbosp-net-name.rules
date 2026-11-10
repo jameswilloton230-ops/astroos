@@ -1,0 +1,5 @@
+# Pin the first wired NIC to eth0 so NetworkManager and scripts have a stable name.
+# eudev's biosdevname renames e1000 to eno16777736 which breaks predictability.
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="e1000", ATTR{type}=="1", NAME="eth0"
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="vmxnet3", ATTR{type}=="1", NAME="eth0"
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="pcnet32", ATTR{type}=="1", NAME="eth0"

@@ -1,0 +1,24 @@
+{
+  "id": "com.nbosp.calculator",
+  "name": "Calculator",
+  "version": "3.0.2",
+  "author": "DirazCoder",
+  "description": "Perform everyday calculations with NovaByte's built-in calculator.",
+  "entry": "index.html",
+  "icon": "calculator",
+  "type": "blank",
+  "defaultSize": [
+    320,
+    440
+  ],
+  "minSize": [
+    280,
+    380
+  ],
+  "resizable": true,
+  "frame": true,
+  "categories": [
+    "utilities"
+  ],
+  "system": true
+}

@@ -1,0 +1,11 @@
+{
+  "id": "com.nbosp.service.event-log",
+  "name": "Event Log",
+  "author": "DirazCoder",
+  "description": "Collects and records system events for diagnostics and the Events app.",
+  "version": "3.0.2",
+  "entry": "service.js",
+  "unrestrictedEntry": "service.js",
+  "system": true,
+  "systemService": true
+}

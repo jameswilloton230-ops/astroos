@@ -1,0 +1,25 @@
+{
+  "id": "com.nbosp.install",
+  "name": "Install NovaByte",
+  "version": "3.0.2",
+  "author": "DirazCoder",
+  "description": "Install NovaByte OS to a selected disk.",
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "icon": "hard-drive",
+  "type": "blank",
+  "defaultSize": [
+    680,
+    520
+  ],
+  "minSize": [
+    520,
+    420
+  ],
+  "resizable": true,
+  "frame": true,
+  "categories": [
+    "system"
+  ],
+  "system": true
+}

@@ -1,0 +1,11 @@
+{
+  "id": "com.nbosp.service.novabyte-system",
+  "name": "NovaByte System",
+  "author": "DirazCoder",
+  "description": "Coordinates system preferences, security policy, and guest hardware controls through OS services.",
+  "version": "3.0.2",
+  "entry": "service.js",
+  "unrestrictedEntry": "service.js",
+  "system": true,
+  "systemService": true
+}

@@ -1,0 +1,83 @@
+#!/bin/sh
+# S41network — DHCP fallback for eth0 if NetworkManager doesn't configure it.
+#
+# This runs before S45 NetworkManager, so it can't wait for NM inline. It
+# forks, gives NM time to start and bring the link up, and only steps in if
+# eth0 still has no IPv4 address. Boot never waits on the network.
+
+IFACE=eth0
+CONSOLE=${CONSOLE:-/dev/console}
+WAIT=${S41_WAIT:-20}
+
+# /etc/resolv.conf is a symlink to /tmp/resolv.conf (tmpfs), so on every boot
+# it dangles until NetworkManager gets a lease. Anything that resolves a name
+# before then (or when DHCP hands out no DNS) fails with a DNS error even
+# though the interface looks up. Seed it with public resolvers; NM replaces
+# the file as soon as a connection brings its own servers.
+seed_resolv() {
+  target=/tmp/resolv.conf
+  if ! grep -q '^nameserver' "$target" 2>/dev/null; then
+    printf '# nbosp fallback, replaced by NetworkManager\nnameserver 1.1.1.1\nnameserver 8.8.8.8\n' > "$target"
+  fi
+}
+
+fallback() {
+  ip link show "$IFACE" >/dev/null 2>&1 || { echo "S41network: $IFACE not found"; return; }
+  ip link set "$IFACE" up 2>/dev/null
+
+  i=0
+  while [ "$i" -lt "$WAIT" ]; do
+    ip addr show "$IFACE" 2>/dev/null | grep -q "inet " && return
+    sleep 1
+    i=$((i + 1))
+  done
+
+  # No carrier means nothing on the guest side can fix it: the virtual cable
+  # is unplugged (VMware adapter not connected, wrong network, etc.).
+  carrier=$(cat "/sys/class/net/$IFACE/carrier" 2>/dev/null)
+  if [ "$carrier" != 1 ]; then
+    echo "S41network: $IFACE has no link. Check that the VM network adapter is connected."
+    return
+  fi
+
+  echo "S41network: NetworkManager did not configure $IFACE, trying udhcpc"
+  udhcpc -i "$IFACE" -t 5 -T 2 -n -q || echo "S41network: no DHCP server answered on $IFACE"
+}
+
+# NetworkManager's own logs never reach the serial console, so without this a
+# "network doesn't work" report from a boot log can't say where it broke:
+# address, route, DNS file, NM's view, then pings that separate IP from DNS.
+diagnose() {
+  echo "=== S41network diagnostics ==="
+  ip -4 -o addr show 2>&1
+  ip route 2>&1
+  ls -l /etc/resolv.conf 2>&1
+  cat /etc/resolv.conf 2>&1
+  ls -l /etc/NetworkManager/system-connections 2>&1
+  nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device 2>&1
+  nmcli -t -f STATE,CONNECTIVITY general 2>&1
+  gw=$(ip route 2>/dev/null | awk '/^default/ {print $3; exit}')
+  if [ -n "$gw" ]; then
+    ping -c1 -W2 "$gw" >/dev/null 2>&1 && echo "ping gateway $gw: ok" || echo "ping gateway $gw: FAILED"
+  else
+    echo "no default route"
+  fi
+  ping -c1 -W3 1.1.1.1 >/dev/null 2>&1 && echo "ping 1.1.1.1: ok" || echo "ping 1.1.1.1: FAILED"
+  ping -c1 -W3 example.com >/dev/null 2>&1 && echo "ping example.com (DNS): ok" || echo "ping example.com (DNS): FAILED"
+  echo "=== end diagnostics ==="
+}
+
+case "$1" in
+  start)
+    seed_resolv
+    { fallback; sleep 3; diagnose; } </dev/null >"$CONSOLE" 2>&1 &
+    ;;
+  stop)
+    ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+    ;;
+esac
+
+exit 0

@@ -1,0 +1,19 @@
+diff --git a/types/wlr_linux_dmabuf_v1.c b/types/wlr_linux_dmabuf_v1.c
+index 57268c2..642b42f 100644
+--- a/types/wlr_linux_dmabuf_v1.c
++++ b/types/wlr_linux_dmabuf_v1.c
+@@ -218,9 +218,12 @@ static bool check_import_dmabuf(struct wlr_dmabuf_attributes *attribs, void *dat
+ 			wlr_log_errno(WLR_DEBUG, "Failed to import DMA-BUF FD");
+ 			return false;
+ 		}
++		// The import itself worked, so the buffer is usable. Some drivers
++		// (vmwgfx) return EINVAL from the GEM close ioctl for handles that
++		// came from a PRIME import. Treating that as "import failed" makes
++		// Xwayland get killed with a fatal protocol error, so just log it.
+ 		if (drmCloseBufferHandle(linux_dmabuf->main_device_fd, handle) != 0) {
+-			wlr_log_errno(WLR_ERROR, "Failed to close buffer handle");
+-			return false;
++			wlr_log_errno(WLR_DEBUG, "Failed to close buffer handle");
+ 		}
+ 	}
+ 	return true;

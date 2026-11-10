@@ -1,0 +1,6 @@
+/* Downloads-only hover treatments; shared buttons and tokens stay in the OS stylesheet. */
+@layer apps {
+  .app-window[data-app-id="com.nbosp.downloads"] .dl-row:hover { background: var(--bg-hover); }
+  .app-window[data-app-id="com.nbosp.downloads"] .dl-delbtn { color: var(--text-muted); transition: color 0.1s; }
+  .app-window[data-app-id="com.nbosp.downloads"] .dl-row:hover .dl-delbtn { color: var(--text-danger); }
+}

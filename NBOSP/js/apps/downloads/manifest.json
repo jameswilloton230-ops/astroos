@@ -1,0 +1,26 @@
+{
+  "id": "com.nbosp.downloads",
+  "name": "Downloads",
+  "version": "3.0.2",
+  "author": "DirazCoder",
+  "description": "View and manage files downloaded through NovaByte OS.",
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "icon": "download",
+  "type": "blank",
+  "defaultSize": [
+    580,
+    460
+  ],
+  "minSize": [
+    400,
+    300
+  ],
+  "resizable": true,
+  "frame": true,
+  "categories": [
+    "utilities"
+  ],
+  "system": true,
+  "transparent": true
+}

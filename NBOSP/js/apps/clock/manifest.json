@@ -1,0 +1,26 @@
+{
+  "id": "com.nbosp.clock",
+  "name": "Clock",
+  "version": "3.0.2",
+  "author": "DirazCoder",
+  "description": "Keep time, set alarms, and use the timer and stopwatch.",
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "icon": "alarm-clock",
+  "type": "blank",
+  "defaultSize": [
+    400,
+    600
+  ],
+  "minSize": [
+    340,
+    480
+  ],
+  "resizable": true,
+  "frame": true,
+  "categories": [
+    "utilities"
+  ],
+  "system": true,
+  "transparent": true
+}

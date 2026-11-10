@@ -1,0 +1,232 @@
+.quill-container {
+
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  
+}
+
+.quill-tabs {
+
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid var(--border-subtle);
+    overflow-x: auto;
+    flex-shrink: 0;
+  
+}
+
+.quill-tab {
+
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: color var(--t-fast);
+    min-height: 36px;
+  
+}
+
+.quill-tab.active {
+
+    color: var(--text-primary);
+    border-bottom-color: var(--accent);
+  
+}
+
+.quill-tab:hover {
+
+    color: var(--text-primary);
+  
+}
+
+.quill-editor-wrap {
+
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+  
+}
+
+.quill-gutter {
+
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--quill-gutter-width, 58px);
+    flex-shrink: 0;
+    background: #030508;
+    border-right: 1px solid var(--border-subtle);
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    padding-top: 8px;
+    padding-right: 8px;
+    color: var(--text-secondary);
+    text-align: right;
+    direction: ltr;
+    user-select: none;
+    white-space: pre;
+    pointer-events: none;
+    z-index: 11;
+  
+}
+
+.quill-wrap-measure {
+
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: auto;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: -1;
+  
+}
+
+.quill-editor {
+
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 8px 12px;
+    color: var(--text-primary);
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    overflow-y: auto;
+    white-space: pre;
+    tab-size: 2;
+    caret-color: var(--accent);
+    width: 100%;
+  
+}
+
+.quill-overlay {
+
+    position: absolute;
+    inset: 0;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 8px 12px;
+    padding-inline-start: 58px;
+    color: transparent;
+    background: transparent;
+    pointer-events: none;
+    overflow-y: auto;
+    white-space: pre;
+    tab-size: 2;
+    z-index: 1;
+  
+}
+
+.quill-textarea {
+
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 8px 12px;
+    padding-left: var(--quill-gutter-width, 58px);
+    direction: ltr;
+    text-align: left;
+    color: var(--text-primary);
+    background: var(--bg-sunken);
+    border: none;
+    outline: none;
+    resize: none;
+    overflow-y: auto;
+    white-space: pre;
+    tab-size: 2;
+    caret-color: var(--accent);
+    opacity: 1;
+    z-index: 10;
+    pointer-events: auto;
+  
+}
+
+.quill-textarea.is-wrapped {
+
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  
+}
+
+.quill-cursors {
+
+    position: absolute;
+    top: 0;
+    left: 50px;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 2;
+  
+}
+
+.quill-cursor {
+
+    position: absolute;
+    width: 2px;
+    height: 18px;
+    background: var(--accent);
+    animation: blink 1s infinite;
+  
+}
+
+.quill-minimap {
+
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 80px;
+    background: var(--bg-elevated);
+    border-left: 1px solid var(--border-subtle);
+    display: none;
+    cursor: pointer;
+  
+}
+
+.quill-editor-wrap.with-minimap {
+
+    padding-inline-end: 80px;
+  
+}
+
+.quill-statusbar {
+
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 4px 12px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 11px;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.15);
+  
+}
+
+
+@layer apps {
+  .app-window[data-app-id="com.nbosp.textedit"] .quill-editor-wrap { contain: strict; }
+}

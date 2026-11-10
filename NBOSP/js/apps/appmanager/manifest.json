@@ -1,0 +1,19 @@
+{
+  "id": "com.nbosp.appmanager",
+  "name": "App Manager",
+  "version": "3.0.2",
+  "description": "Install and manage NovaByte apps, including .novaapp packages and web apps.",
+  "author": "DirazCoder",
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "icon": "package",
+  "type": "blank",
+  "permissions": [],
+  "optionalPermissions": [],
+  "defaultSize": [980, 640],
+  "minSize": [720, 480],
+  "resizable": true,
+  "frame": true,
+  "categories": ["utilities"],
+  "system": true
+}

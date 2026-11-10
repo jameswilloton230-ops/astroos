@@ -1,0 +1,3 @@
+- - render 60000 - - - - Render device access group
+- - nbosp-wayland 62001 - - - - Per-app Wayland socket access
+nbosp 1000 nbosp 1000 ! /home/nbosp /bin/sh video,input,seat,render,nbosp-wayland NBOSP-kiosk-user

@@ -1,0 +1,11 @@
+/* NovaReg fallback page styles (the real editor UI is rendered by app.js
+   in the OS page context, styled with the OS design tokens). */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-base, #0f1115);
+  color: var(--text-primary, #e6e6e6);
+  font-family: var(--font-ui, system-ui, sans-serif);
+}

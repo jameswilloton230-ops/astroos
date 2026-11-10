@@ -1,0 +1,4 @@
+# name	type	mode	uid	gid	major	minor	start	inc	count
+/etc/NetworkManager/system-connections/wired.nmconnection	f	600	0	0	-	-	-	-	-
+/etc/sudoers	f	440	0	0	-	-	-	-	-
+/etc/sudoers.d/nbosp	f	440	0	0	-	-	-	-	-

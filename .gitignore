@@ -1,0 +1,32 @@
+**/node_modules/
+**/.env
+**/*.key
+**/*.pem
+**/cert.crt
+**/cert.key
+**/.update-backups/
+**/.update-keys/
+**/server.log
+/build
+/novabyte-v3-build
+/.build-stage
+**/.cache/
+**/.dist/
+/NBOSP/cache/
+/NBOSP/dist/
+**/ca.crt
+**/ca.trusted
+/NBOSP/data/
+/NBOSP/js/purify.min.js
+/NBOSP/.zcode
+/NBOSP/.kilo
+/NBOSP/.vs
+/NBOSP/graphify-out
+/NBOSP/.graphifyignore
+server.log
+.wrangler
+
+# prebuilt app packages — source lives in NBOSP/js/apps/<name>/, build with repackage.js
+/NBOSP/js/apps/*.novaapp
+# Supabase CLI local state
+supabase/.temp/

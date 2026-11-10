@@ -1,0 +1,110 @@
+@layer apps {
+  /* ---- Shell (terminal) ------------------------------------------------- */
+  .shell-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--bg-base);
+  }
+  .shell-tabs {
+    display: flex;
+    align-items: center;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+  .shell-tab {
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    border-bottom: 2px solid transparent;
+    font-family: var(--font-mono);
+    min-height: 36px;
+  }
+  .shell-tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--accent);
+  }
+  .shell-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-all;
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 600px;
+  }
+  .shell-input-line {
+    display: flex;
+    align-items: center;
+    padding: 4px 12px 8px;
+  }
+  .shell-prompt {
+    color: var(--text-success);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    flex-shrink: 0;
+    margin-inline-end: 6px;
+  }
+  .shell-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    caret-color: var(--accent);
+  }
+  .shell-container.shell-split {
+    display: flex;
+    flex-direction: row;
+  }
+  .shell-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .shell-pane-left {
+    border-right: 1px solid var(--border-subtle);
+  }
+  .shell-divider {
+    width: 4px;
+    background: var(--border-subtle);
+    cursor: col-resize;
+    flex-shrink: 0;
+  }
+  .shell-divider:hover {
+    background: var(--accent);
+  }
+
+  /* ANSI-like colour classes emitted by the shell's syntax highlighter. */
+  .shell-green   { color: #3fb950; }
+  .shell-blue    { color: #58a6ff; }
+  .shell-red     { color: #f85149; }
+  .shell-yellow  { color: #d29922; }
+  .shell-cyan    { color: #56d4dd; }
+  .shell-magenta { color: #bc8cff; }
+  .shell-bold    { font-weight: 700; }
+  .shell-dim     { opacity: 0.6; }
+  .shell-cmd     { color: #58a6ff; font-weight: 600; }
+  .shell-flag    { color: #d29922; }
+  .shell-string  { color: #a5d6ff; }
+  .shell-var     { color: #ff7b72; }
+  .shell-pipe    { color: #f85149; font-weight: 700; }
+  .shell-operator{ color: #f85149; font-weight: 700; }
+  .shell-path    { color: #79c0ff; }
+  .shell-number  { color: #79c0ff; }
+}
+
+@layer windows {
+  .shell-output { contain: strict; }
+}

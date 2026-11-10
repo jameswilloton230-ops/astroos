@@ -1,0 +1,4 @@
+project_id = "jcrptxtmieveoijdbtqa"
+
+[functions.publisher-api]
+verify_jwt = false

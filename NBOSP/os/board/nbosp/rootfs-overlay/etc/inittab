@@ -1,0 +1,5 @@
+::sysinit:/bin/sh /etc/init.d/rcS
+::shutdown:/bin/sh /etc/init.d/rcK
+::restart:/sbin/init
+tty2::respawn:/sbin/getty -L tty2 0 vt100
+::ctrlaltdel:/sbin/reboot
