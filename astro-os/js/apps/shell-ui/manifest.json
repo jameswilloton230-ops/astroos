@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.shell-ui",
   "name": "AstroOS Shell UI",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Provides the trusted host desktop, window manager, context menus, and modal dialogs.",
   "version": "3.0.2",
   "entry": "wm.js",

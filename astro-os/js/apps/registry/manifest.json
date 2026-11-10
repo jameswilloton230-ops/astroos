@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.registry",
   "name": "Web App Registry Service",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Maintains the OS registry of installed apps and their launch metadata.",
   "version": "3.0.2",
   "entry": "service.js",

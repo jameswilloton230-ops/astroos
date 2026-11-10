@@ -2,7 +2,7 @@
   "id": "com.astroos.music",
   "name": "Music",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Play and manage your music in AstroOS.",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",

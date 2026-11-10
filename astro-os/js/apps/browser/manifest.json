@@ -3,7 +3,7 @@
   "name": "Browser",
   "version": "3.0.2",
   "description": "Browse websites and manage your web browsing experience in AstroOS.",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",
   "icon": "globe",

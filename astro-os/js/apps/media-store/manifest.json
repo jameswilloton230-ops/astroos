@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.media-store",
   "name": "AstroOS MediaStore",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Indexes shared image, audio, and video files for permission-scoped media libraries.",
   "version": "3.0.2",
   "entry": "service.js",

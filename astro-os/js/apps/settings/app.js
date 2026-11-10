@@ -3179,9 +3179,14 @@ registerApp({
     }
 
     // About
+    // About — the redesigned About page from the previous AstroOS release
+    // (centered hero, organised cards with Material icon headers, and the
+    // Asteroid Dodger easter egg), merged with the richer hardware and
+    // environment data the current platform exposes.
     function renderAbout() {
       mainContent.style.padding = '0';
-      const body = createEl('div', { style: 'padding:24px 28px;display:flex;flex-direction:column;gap:18px;overflow-y:auto;flex:1;' });
+      const body = createEl('div', { style: 'padding:20px 24px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;flex:1;' });
+
       const linuxInfo = {
         distribution: 'Not running on Linux',
         kernel: 'Unavailable',
@@ -3204,163 +3209,355 @@ registerApp({
         }
       }
 
-      function mkSection(title, icon) {
-        const wrap = createEl('div', { style: 'background:var(--bg-sunken);border:1px solid var(--border-subtle);border-radius:12px;overflow:hidden;' });
-        const hdr  = createEl('div', { style: 'padding:11px 16px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.025);' });
-        hdr.appendChild(createEl('span', { textContent: icon,  style: 'font-size:13px;', 'aria-hidden': 'true' }));
-        hdr.appendChild(createEl('span', { textContent: title, style: 'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;color:var(--text-muted);' }));
+      // ── helpers ──────────────────────────────────────────────────────────
+      function mkCard(title, iconName) {
+        const wrap = createEl('div', { style: 'background:rgba(255,255,255,0.035);border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;' });
+        const hdr = createEl('div', { style: 'padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;' });
+        hdr.innerHTML = '<span class="material-symbols-rounded" style="font-size:15px;color:#4dd0e1;font-variation-settings:\'FILL\' 1,\'wght\' 400,\'GRAD\' 0,\'opsz\' 24;">' + iconName + '</span>';
+        hdr.appendChild(createEl('span', { textContent: title, style: 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.4);' }));
         const rows = createEl('div', { style: 'padding:0 16px;' });
         wrap.append(hdr, rows);
         return { wrap, rows };
       }
 
       function mkRow(label, value, last) {
-        const row = createEl('div', { style: 'display:flex;justify-content:space-between;align-items:center;padding:9px 0;font-size:12.5px;' + (last ? '' : 'border-bottom:1px solid var(--border-subtle);') });
-        const lbl = createEl('span', { textContent: label, style: 'color:var(--text-secondary);flex-shrink:0;margin-right:12px;' });
-        const val = createEl('span', { style: 'color:var(--text-primary);font-weight:500;text-align:right;max-width:65%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' });
-        val.textContent = value;
-        row.append(lbl, val);
+        const row = createEl('div', { style: 'display:flex;justify-content:space-between;align-items:center;padding:11px 0;font-size:12.5px;' + (last ? '' : 'border-bottom:1px solid rgba(255,255,255,0.05);') });
+        row.appendChild(createEl('span', { textContent: label, style: 'color:rgba(255,255,255,0.5);' }));
+        const val = createEl('span', { textContent: value, style: 'color:rgba(255,255,255,0.9);font-weight:500;text-align:right;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' });
+        row.appendChild(val);
         return row;
       }
 
-      // Software
-      const { wrap: swWrap, rows: swRows } = mkSection('Software Information', '\uD83D\uDCBF');
+      // ── HERO ─────────────────────────────────────────────────────────────
+      const hero = createEl('div', { style: 'display:flex;flex-direction:column;align-items:center;padding:28px 16px 20px;text-align:center;gap:10px;' });
 
-      const logoRow = createEl('div', { style: 'padding:18px 0 14px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--border-subtle);' });
-      const logoBox = createEl('div', { style: 'width:54px;height:54px;border-radius:15px;background:linear-gradient(135deg,#3d8eff 0%,#7c5cfc 55%,#c45cff 100%);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 22px rgba(88,166,255,0.32),0 2px 8px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.22);flex-shrink:0;' });
-      // Static SVG literal — no user input, safe to set via innerHTML
-      logoBox.innerHTML = '<svg viewBox="0 0 120 120" width="32" height="32" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="abt-g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#58a6ff"/><stop offset="100%" stop-color="#a371f7"/></linearGradient></defs><polygon points="60,5 110,30 110,85 60,115 10,85 10,30" fill="rgba(88,166,255,0.05)" stroke="url(#abt-g)" stroke-width="2.5" opacity="0.9"/><polygon points="60,15 100,35 100,80 60,105 20,80 20,35" fill="none" stroke="url(#abt-g)" stroke-width="1.5" opacity="0.38"/><polygon points="60,28 88,43 88,76 60,91 32,76 32,43" fill="rgba(163,113,247,0.05)" stroke="url(#abt-g)" stroke-width="1" opacity="0.3"/><text x="60" y="69" text-anchor="middle" fill="url(#abt-g)" font-family="system-ui,-apple-system,sans-serif" font-size="30" font-weight="700">NB</text></svg>';
-      const logoMeta = createEl('div');
-      const lgTitle  = createEl('div', { style: 'font-size:17px;font-weight:800;background:linear-gradient(130deg,var(--text-primary) 25%,var(--accent) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px;line-height:1.15;', textContent: 'AstroOS' });
-      const verBadge = createEl('div', { style: 'display:inline-flex;align-items:center;gap:5px;background:rgba(88,166,255,0.12);border:1px solid rgba(88,166,255,0.3);border-radius:20px;padding:2px 11px;font-size:11px;font-weight:700;color:var(--accent);margin-bottom:3px;', textContent: 'v' + OS.version });
-      const tagline = createEl('div', { style: 'font-size:10.5px;color:var(--text-muted);font-style:italic;', textContent: '' });
-      logoMeta.append(lgTitle, verBadge, tagline);
-      logoRow.append(logoBox, logoMeta);
-      swRows.appendChild(logoRow);
-      swRows.appendChild(mkRow('Operating System', linuxInfo.distribution));
-      swRows.appendChild(mkRow('Linux Kernel', linuxInfo.kernel));
-      swRows.appendChild(mkRow('Architecture', linuxInfo.architecture));
+      // Hexagon logo
+      const logoWrap = createEl('div', { style: 'width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#0a84ff 0%,#5e5ce6 50%,#bf5af2 100%);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(94,92,230,0.45),0 2px 8px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.2);margin-bottom:4px;' });
+      logoWrap.innerHTML = '<svg viewBox="0 0 80 80" width="42" height="42" xmlns="http://www.w3.org/2000/svg"><polygon points="40,6 68,22 68,58 40,74 12,58 12,22" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2.5"/><polygon points="40,16 60,28 60,52 40,64 20,52 20,28" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.5"/><circle cx="40" cy="40" r="6" fill="white" opacity="0.9"/><line x1="40" y1="6" x2="40" y2="16" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/><line x1="68" y1="22" x2="60" y2="28" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/><line x1="68" y1="58" x2="60" y2="52" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/><line x1="40" y1="74" x2="40" y2="64" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/><line x1="12" y1="58" x2="20" y2="52" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/><line x1="12" y1="22" x2="20" y2="28" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/></svg>';
 
-      // Version row — easter egg: 7 clicks launches Snake
-      const novaVersionRow = createEl('div', {
-        className: 'nook-row clickable',
-        style: 'display:flex;justify-content:space-between;align-items:center;padding:9px 0;font-size:12.5px;border-bottom:1px solid var(--border-subtle);cursor:pointer;transition:background 0.15s;border-radius:6px;',
-        role: 'button',
-        tabindex: '0',
-        'aria-label': 'AstroOS version (click 7 times for a surprise)'
-      });
-      novaVersionRow.addEventListener('mouseenter', () => { novaVersionRow.style.background = 'rgba(88,166,255,0.08)'; });
-      novaVersionRow.addEventListener('mouseleave', () => { novaVersionRow.style.background = 'transparent'; });
-      const novaVerLabel = createEl('span', { textContent: 'AstroOS Version', style: 'color:var(--text-secondary);flex-shrink:0;margin-right:12px;' });
-      const novaVerValue = createEl('span', { style: 'color:var(--text-primary);font-weight:500;text-align:right;max-width:65%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;', textContent: 'v' + OS.version });
-      novaVersionRow.append(novaVerLabel, novaVerValue);
+      const osName = createEl('div', { style: 'font-size:26px;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(130deg,#ffffff 30%,#bf5af2 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;' });
+      osName.textContent = 'AstroOS';
 
-      let clickCount = 0;
-      let clickTimeout = null;
-      function handleVersionClick() {
-        clickCount++;
-        if (clickCount >= 7) {
-          clickCount = 0;
-          if (clickTimeout) { clearTimeout(clickTimeout); clickTimeout = null; }
-          window.AstroOSEasterEgg.launch();
+      const verPill = createEl('div', { style: 'display:inline-flex;align-items:center;gap:5px;background:rgba(94,92,230,0.18);border:1px solid rgba(94,92,230,0.4);border-radius:20px;padding:3px 14px;font-size:11px;font-weight:700;color:#a39df5;' });
+      verPill.textContent = 'AstroOS v' + OS.version + ' \u00B7 NovaByte v' + OS.version;
+
+      const tagline = createEl('div', { style: 'font-size:11px;color:rgba(255,255,255,0.3);font-style:italic;' });
+      tagline.textContent = '\u201CExplore beyond limits.\u201D';
+
+      hero.append(logoWrap, osName, verPill, tagline);
+      body.appendChild(hero);
+
+      // ── CARD 1: SOFTWARE ──────────────────────────────────────────────────
+      const { wrap: swWrap, rows: swRows } = mkCard('Software', 'deployed_code');
+
+      // Build number row — tap 7x for Asteroid Dodger
+      const buildRow = createEl('div', { style: 'display:flex;justify-content:space-between;align-items:center;padding:11px 0;font-size:12.5px;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;border-radius:14px;transition:background 0.15s;user-select:none;' });
+      buildRow.appendChild(createEl('span', { textContent: 'Build number', style: 'color:rgba(255,255,255,0.5);' }));
+      const buildRight = createEl('div', { style: 'display:flex;align-items:center;gap:8px;' });
+      const buildVal = createEl('span', { textContent: 'astro-' + OS.version + '-stable', style: 'color:rgba(255,255,255,0.9);font-weight:500;font-family:monospace;font-size:11.5px;' });
+      const buildHint = createEl('span', { textContent: '', style: 'font-size:10px;color:#4dd0e1;min-width:60px;text-align:right;transition:opacity 0.2s;' });
+      buildRight.append(buildVal, buildHint);
+      buildRow.appendChild(buildRight);
+
+      let _tapCount = 0, _tapTimer = null;
+      buildRow.addEventListener('mouseenter', () => { buildRow.style.background = 'rgba(77,208,225,0.06)'; buildRow.style.paddingLeft = '6px'; buildRow.style.paddingRight = '6px'; }, { signal: lifecycle.signal });
+      buildRow.addEventListener('mouseleave', () => { buildRow.style.background = 'transparent'; buildRow.style.paddingLeft = ''; buildRow.style.paddingRight = ''; }, { signal: lifecycle.signal });
+      buildRow.addEventListener('click', () => {
+        _tapCount++;
+        const left = 7 - _tapCount;
+        if (_tapCount >= 7) {
+          _tapCount = 0;
+          clearTimeout(_tapTimer);
+          buildHint.textContent = '';
+          launchAsteroidGame();
           return;
         }
-        if (clickTimeout) clearTimeout(clickTimeout);
-        clickTimeout = setTimeout(() => { clickCount = 0; clickTimeout = null; }, 1500);
-      }
-      novaVersionRow.addEventListener('click', handleVersionClick, { signal: lifecycle.signal });
-      novaVersionRow.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleVersionClick(); }
+        buildHint.textContent = left + ' tap' + (left === 1 ? '' : 's') + ' left';
+        clearTimeout(_tapTimer);
+        _tapTimer = setTimeout(() => { _tapCount = 0; buildHint.textContent = ''; }, 2000);
       }, { signal: lifecycle.signal });
-      swRows.appendChild(novaVersionRow);
-      swRows.appendChild(mkRow('Source Date',  '2026-11-04'));
 
-      const secRow      = createEl('div', { style: 'display:flex;justify-content:space-between;align-items:center;padding:9px 0;font-size:12.5px;border-top:1px solid var(--border-subtle);border-radius:6px;' });
-      const secRowLeft  = createEl('div', { style: 'display:flex;align-items:center;gap:6px;' });
-      secRowLeft.appendChild(createEl('span', { textContent: 'Security Patch Level', style: 'color:var(--text-secondary);' }));
-      secRow.appendChild(secRowLeft);
-      const secRowRight = createEl('div', { style: 'display:flex;align-items:center;gap:6px;' });
-      const secBadge    = createEl('span', { style: 'display:inline-flex;align-items:center;gap:5px;background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.3);border-radius:20px;padding:2px 10px;font-size:10.5px;font-weight:700;color:#3fb950;', textContent: '\uD83D\uDD12 2026-08-02' });
-      secRowRight.appendChild(secBadge);
-      secRow.appendChild(secRowRight);
-      swRows.appendChild(secRow);
+      swRows.appendChild(buildRow);
+
+      // AstroOS version row
+      swRows.appendChild(mkRow('AstroOS version', 'v' + OS.version, false));
+      // NovaByte base version row
+      swRows.appendChild(mkRow('NovaByte base', 'v' + OS.version, false));
+
+      // Platform rows (from the current platform: real OS image details)
+      swRows.appendChild(mkRow('Operating System', linuxInfo.distribution, false));
+      swRows.appendChild(mkRow('Linux Kernel', linuxInfo.kernel, false));
+      swRows.appendChild(mkRow('Architecture', linuxInfo.architecture, false));
+      swRows.appendChild(mkRow('Source Date', '2026-11-04', false));
+
+      // Security patch row
+      const patchRow = createEl('div', { style: 'display:flex;justify-content:space-between;align-items:center;padding:11px 0;font-size:12.5px;' });
+      patchRow.appendChild(createEl('span', { textContent: 'Security patch level', style: 'color:rgba(255,255,255,0.5);' }));
+      const patchBadge = createEl('span', { style: 'background:rgba(63,185,80,0.12);border:1px solid rgba(63,185,80,0.3);border-radius:20px;padding:2px 10px;font-size:10.5px;font-weight:700;color:#3fb950;' });
+      patchBadge.textContent = '\uD83D\uDD12 2026-08-02';
+      patchRow.appendChild(patchBadge);
+      swRows.appendChild(patchRow);
+
       body.appendChild(swWrap);
 
-      // Hardware
-      const { wrap: hwWrap, rows: hwRows } = mkSection('Hardware', '\uD83D\uDDA5\uFE0F');
+      // ── CARD 2: DEVICE ────────────────────────────────────────────────────
+      const { wrap: hwWrap, rows: hwRows } = mkCard('Device', 'devices');
       const hardware = window.AstroOSSystem.hardware.getInventory();
       const graphicsSummary = hardware.supported
         ? hardware.graphics.map(device => [device.vendor, device.driver].filter(Boolean).join(' ')).filter(Boolean).join(', ') || 'No graphics device reported'
         : 'Unavailable';
+      const uptimeSec = Math.floor(performance.now() / 1000);
+      const uptimeStr = uptimeSec < 60 ? uptimeSec + 's'
+        : uptimeSec < 3600 ? Math.floor(uptimeSec / 60) + 'm ' + (uptimeSec % 60) + 's'
+          : Math.floor(uptimeSec / 3600) + 'h ' + Math.floor((uptimeSec % 3600) / 60) + 'm';
       [
-        ['Screen Resolution', hardware.display?.resolution
-          ? `${hardware.display.resolution.width}\u00D7${hardware.display.resolution.height}`
-          : screen.width + '\u00D7' + screen.height,                                                               false],
-        ['Colour Depth',      screen.colorDepth + ' bit',                                                             false],
-        ['Pixel Ratio',       window.devicePixelRatio + '\u00D7',                                                     false],
-        ['CPU Cores',         String(hardware.cpu?.logicalCores || navigator.hardwareConcurrency || 'Unknown'),      false],
-        ['Graphics Device',   graphicsSummary,                                                                        false],
-        ['Virtualization',    hardware.virtualization?.vendor || 'Not identified',                                   false],
-        ['VMware Tools',      hardware.vmwareTools?.running ? 'Running' : hardware.vmwareTools?.installed ? 'Installed, not running' : 'Not detected', false],
-        ['Device Memory',     hardware.memory?.totalBytes
-          ? `${(hardware.memory.totalBytes / (1024 ** 3)).toFixed(1)} GB`
-          : navigator.deviceMemory ? navigator.deviceMemory + ' GB (approx.)' : 'Not reported',                      false],
-        ['Touch Points',      navigator.maxTouchPoints > 0 ? String(navigator.maxTouchPoints) + ' point(s)' : 'None', true]
-      ].forEach(([lbl, val, last]) => hwRows.appendChild(mkRow(lbl, val, last)));
+        ['Screen', hardware.display?.resolution
+          ? hardware.display.resolution.width + ' \u00D7 ' + hardware.display.resolution.height
+          : screen.width + ' \u00D7 ' + screen.height],
+        ['Pixel ratio', window.devicePixelRatio + '\u00D7'],
+        ['CPU cores', String(hardware.cpu?.logicalCores || navigator.hardwareConcurrency || 'Unknown')],
+        ['Graphics device', graphicsSummary],
+        ['Virtualization', hardware.virtualization?.vendor || 'Not identified'],
+        ['VMware Tools', hardware.vmwareTools?.running ? 'Running' : hardware.vmwareTools?.installed ? 'Installed, not running' : 'Not detected'],
+        ['Device memory', hardware.memory?.totalBytes
+          ? (hardware.memory.totalBytes / (1024 ** 3)).toFixed(1) + ' GB'
+          : navigator.deviceMemory ? navigator.deviceMemory + ' GB (est.)' : 'Not reported'],
+        ['Session uptime', uptimeStr],
+      ].forEach(([l, v], i, a) => hwRows.appendChild(mkRow(l, v, i === a.length - 1)));
       body.appendChild(hwWrap);
 
-      // Environment
-      const { wrap: envWrap, rows: envRows } = mkSection('Environment', '\uD83C\uDF10');
+      // ── CARD 3: ENVIRONMENT ───────────────────────────────────────────────
+      const { wrap: envWrap, rows: envRows } = mkCard('Environment', 'language');
       let tz = 'Unknown';
       try { tz = systemSettings.get('timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Unknown'; } catch { /* sandboxed */ }
       [
-        ['Browser',         detectBrowser(),                                                                          false],
-        ['Platform',        navigator.platform,                                                                        false],
-        ['Region',          systemSettings.get('region') || navigator.language,                                          false],
-        ['Timezone',        tz,                                                                                        false],
-        ['Do Not Track',    navigator.doNotTrack === '1' ? 'Enabled \u2713' : 'Not set',                             false],
-        ['Cookies',         navigator.cookieEnabled ? 'Enabled \u2713' : 'Disabled',                                 false],
-        ['Service Workers', ('serviceWorker' in navigator) ? 'Supported \u2713' : 'Not supported',                    true]
-      ].forEach(([lbl, val, last]) => envRows.appendChild(mkRow(lbl, val, last)));
+        ['Language', systemSettings.get('region') || navigator.language],
+        ['Timezone', tz],
+        ['Do Not Track', navigator.doNotTrack === '1' ? 'On \u2713' : 'Off'],
+        ['Cookies', navigator.cookieEnabled ? 'Enabled \u2713' : 'Disabled'],
+        ['Service Workers', ('serviceWorker' in navigator) ? 'Supported \u2713' : 'Not supported'],
+      ].forEach(([l, v], i, a) => envRows.appendChild(mkRow(l, v, i === a.length - 1)));
       body.appendChild(envWrap);
 
-      // Legal
-      const { wrap: lgWrap, rows: lgRows } = mkSection('Legal \u0026 Licences', '\u2696\uFE0F');
-      lgRows.appendChild(mkRow('Licence',   'Apache 2.0'));
-      lgRows.appendChild(mkRow('Copyright', '\u00A9 2026 DirazCoder'));
+      // ── CARD 4: LEGAL ─────────────────────────────────────────────────────
+      const { wrap: lgWrap, rows: lgRows } = mkCard('Legal', 'gavel');
+      [
+        ['Licence', 'MIT'],
+        ['NBOSP base licence', 'Apache 2.0'],
+        ['Copyright', '\u00A9 2026 jameswilloton230-ops'],
+        ['Telemetry', 'Zero. None. Zilch.'],
+      ].forEach(([l, v], i, a) => lgRows.appendChild(mkRow(l, v, i === a.length - 1)));
       body.appendChild(lgWrap);
 
-      // Copy system info
-      const copyBtn = createEl('button', { className: 'btn btn-sm', textContent: '\uD83D\uDCCB Copy System Info' });
+      // ── Copy button ───────────────────────────────────────────────────────
+      const copyBtn = createEl('button', { className: 'btn btn-sm', style: 'align-self:flex-start;display:flex;align-items:center;gap:6px;' });
+      copyBtn.innerHTML = '<span class="material-symbols-rounded" style="font-size:14px;">content_copy</span> Copy system info';
       copyBtn.addEventListener('click', () => {
         let tzCopy = 'Unknown';
         try { tzCopy = systemSettings.get('timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Unknown'; } catch { /* sandboxed */ }
         const lines = [
-          'AstroOS v' + OS.version,
+          'AstroOS v' + OS.version + ' (based on NovaByte v' + OS.version + ')',
+          'Build: astro-' + OS.version + '-stable',
+          'Security patch: 2026-08-02',
           'Operating System: ' + linuxInfo.distribution,
           'Linux Kernel: ' + linuxInfo.kernel,
           'Architecture: ' + linuxInfo.architecture,
-          'Security Update: 2026-08-02',
-          'Browser: '   + detectBrowser(),
-          'Platform: '  + navigator.platform,
-          'Screen: '    + screen.width + '\u00D7' + screen.height,
-          'CPU Cores: ' + (hardware.cpu?.logicalCores || navigator.hardwareConcurrency || 'Unknown'),
-          'Graphics: '  + graphicsSummary,
-          'Virtualization: ' + (hardware.virtualization?.vendor || 'Not identified'),
-          'Region: '    + (systemSettings.get('region') || navigator.language),
-          'Timezone: '  + tzCopy
+          'Screen: ' + screen.width + '\u00D7' + screen.height,
+          'CPU cores: ' + (hardware.cpu?.logicalCores || navigator.hardwareConcurrency || 'Unknown'),
+          'Graphics: ' + graphicsSummary,
+          'Language: ' + (systemSettings.get('region') || navigator.language),
+          'Timezone: ' + tzCopy,
         ];
         if (navigator.clipboard?.writeText) {
           navigator.clipboard.writeText(lines.join('\n')).then(
-            () => Notify.show({ title: 'Copied', body: 'System info copied to clipboard', type: 'success', appName: 'Nook' }),
-            (err) => { devLog('clipboard.writeText failed:', err); Notify.show({ title: 'Copy Failed', body: 'Clipboard not available', type: 'error', appName: 'Nook' }); }
+            () => Notify.show({ title: 'Copied', body: 'System info copied to clipboard', type: 'success', appName: 'Settings' }),
+            (err) => { devLog('clipboard.writeText failed:', err); Notify.show({ title: 'Copy Failed', body: 'Clipboard not available', type: 'error', appName: 'Settings' }); }
           );
         } else {
-          Notify.show({ title: 'Copy Failed', body: 'Clipboard not available', type: 'error', appName: 'Nook' });
+          Notify.show({ title: 'Copy Failed', body: 'Clipboard not available', type: 'error', appName: 'Settings' });
         }
       }, { signal: lifecycle.signal });
       body.appendChild(copyBtn);
       mainContent.appendChild(body);
+            // ── ASTEROID DODGER ───────────────────────────────────────────────────
+            function launchAsteroidGame() {
+              const overlay = createEl('div', { style: 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);' });
+
+              const panel = createEl('div', { style: 'background:#0a0a1a;border:1px solid rgba(94,92,230,0.4);border-radius:20px;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:20px;gap:12px;box-shadow:0 24px 80px rgba(0,0,0,0.8),0 0 40px rgba(94,92,230,0.2);' });
+
+              const titleRow = createEl('div', { style: 'display:flex;align-items:center;justify-content:space-between;width:100%;' });
+              titleRow.appendChild(createEl('div', { textContent: '\u2604\uFE0F Asteroid Dodger', style: 'font-size:15px;font-weight:700;color:#fff;letter-spacing:0.5px;' }));
+
+              const scoreEl = createEl('div', { textContent: 'Score: 0', style: 'font-size:12px;color:#a39df5;font-weight:600;' });
+              titleRow.appendChild(scoreEl);
+              panel.appendChild(titleRow);
+
+              const canvas = createEl('canvas');
+              canvas.width = 320;
+              canvas.height = 420;
+              canvas.style.cssText = 'border-radius:12px;border:1px solid rgba(255,255,255,0.08);display:block;cursor:none;';
+              panel.appendChild(canvas);
+
+              const hint = createEl('div', { textContent: 'Move mouse or use \u2190\u2192 arrow keys to dodge', style: 'font-size:10.5px;color:rgba(255,255,255,0.35);' });
+              panel.appendChild(hint);
+
+              const closeBtn = createEl('button', { className: 'btn btn-sm', textContent: 'Close', style: 'margin-top:4px;' });
+              closeBtn.addEventListener('click', () => overlay.remove());
+              panel.appendChild(closeBtn);
+
+              overlay.appendChild(panel);
+              document.body.appendChild(overlay);
+
+              const ctx = canvas.getContext('2d');
+              const W = canvas.width, H = canvas.height;
+
+              // Stars background
+              const stars = Array.from({ length: 80 }, () => ({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.5 + 0.3, spd: Math.random() * 0.4 + 0.1 }));
+
+              // Ship
+              const ship = { x: W / 2, y: H - 60, w: 22, h: 30, speed: 0, vx: 0 };
+              const keys = {};
+              let asteroids = [], particles = [], score = 0, lives = 3, gameOver = false, frame = 0, spawnRate = 80;
+
+              function spawnAsteroid() {
+                const sz = 14 + Math.random() * 18;
+                asteroids.push({ x: sz + Math.random() * (W - sz * 2), y: -sz, r: sz, vy: 1.2 + Math.random() * 1.5 + score * 0.003, vx: (Math.random() - 0.5) * 1.2, rot: 0, rotSpd: (Math.random() - 0.5) * 0.06, sides: 6 + Math.floor(Math.random() * 3), color: ['#a39df5', '#4dd0e1', '#bf5af2', '#ff453a'][Math.floor(Math.random() * 4)] });
+              }
+
+              function spawnParticles(x, y, color) {
+                for (let i = 0; i < 12; i++) {
+                  const a = (Math.PI * 2 / 12) * i + Math.random() * 0.5;
+                  const spd = 2 + Math.random() * 3;
+                  particles.push({ x, y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, life: 1, color });
+                }
+              }
+
+              function drawShip(x, y) {
+                ctx.save();
+                ctx.translate(x, y);
+                // Engine glow
+                ctx.shadowBlur = 18; ctx.shadowColor = '#5e5ce6';
+                ctx.fillStyle = 'rgba(94,92,230,0.5)';
+                ctx.beginPath(); ctx.ellipse(0, 14, 5, 8, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.shadowBlur = 0;
+                // Body
+                ctx.fillStyle = '#e0e0ff';
+                ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(11, 12); ctx.lineTo(0, 8); ctx.lineTo(-11, 12); ctx.closePath(); ctx.fill();
+                // Cockpit
+                ctx.fillStyle = '#4dd0e1';
+                ctx.beginPath(); ctx.ellipse(0, -4, 5, 7, 0, 0, Math.PI * 2); ctx.fill();
+                // Wings accent
+                ctx.fillStyle = '#a39df5';
+                ctx.beginPath(); ctx.moveTo(-11, 12); ctx.lineTo(-16, 16); ctx.lineTo(-8, 10); ctx.closePath(); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(11, 12); ctx.lineTo(16, 16); ctx.lineTo(8, 10); ctx.closePath(); ctx.fill();
+                ctx.restore();
+              }
+
+              function drawAsteroid(a) {
+                ctx.save();
+                ctx.translate(a.x, a.y);
+                ctx.rotate(a.rot);
+                ctx.strokeStyle = a.color;
+                ctx.lineWidth = 2;
+                ctx.shadowBlur = 8; ctx.shadowColor = a.color;
+                ctx.beginPath();
+                for (let i = 0; i < a.sides; i++) {
+                  const ang = (Math.PI * 2 / a.sides) * i;
+                  const jitter = a.r * (0.78 + Math.random() * 0.0); // stable shape
+                  const px = Math.cos(ang) * a.r * (0.8 + ((i * 7) % 5) * 0.06);
+                  const py = Math.sin(ang) * a.r * (0.8 + ((i * 5) % 4) * 0.07);
+                  i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+                }
+                ctx.closePath(); ctx.stroke();
+                ctx.shadowBlur = 0;
+                ctx.restore();
+              }
+
+              // Input
+              window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKey);
+              function onKey(e) { keys[e.code] = e.type === 'keydown'; }
+
+              canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                ship.x = Math.max(ship.w, Math.min(W - ship.w, e.clientX - rect.left));
+              });
+
+              function loop() {
+                if (!document.body.contains(overlay)) { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKey); return; }
+                requestAnimationFrame(loop);
+                frame++;
+
+                // Stars
+                ctx.fillStyle = '#040410';
+                ctx.fillRect(0, 0, W, H);
+                stars.forEach(s => {
+                  s.y = (s.y + s.spd) % H;
+                  ctx.fillStyle = 'rgba(255,255,255,' + (0.3 + s.r * 0.3) + ')';
+                  ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+                });
+
+                if (gameOver) {
+                  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, W, H);
+                  ctx.fillStyle = '#fff'; ctx.font = 'bold 22px system-ui'; ctx.textAlign = 'center';
+                  ctx.fillText('GAME OVER', W / 2, H / 2 - 30);
+                  ctx.font = '14px system-ui'; ctx.fillStyle = '#a39df5';
+                  ctx.fillText('Score: ' + score, W / 2, H / 2);
+                  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '12px system-ui';
+                  ctx.fillText('Close and tap build number again to replay', W / 2, H / 2 + 30);
+                  return;
+                }
+
+                // Keyboard movement
+                if (keys['ArrowLeft']) ship.vx = Math.max(ship.vx - 0.8, -5);
+                else if (keys['ArrowRight']) ship.vx = Math.min(ship.vx + 0.8, 5);
+                else ship.vx *= 0.85;
+                ship.x = Math.max(ship.w, Math.min(W - ship.w, ship.x + ship.vx));
+
+                // Spawn
+                if (frame % Math.max(25, spawnRate - Math.floor(score / 8)) === 0) spawnAsteroid();
+                score = Math.floor(frame / 6);
+                scoreEl.textContent = 'Score: ' + score;
+                spawnRate = Math.max(28, 80 - Math.floor(score / 5));
+
+                // Asteroids
+                asteroids = asteroids.filter(a => a.y - a.r < H + 20);
+                asteroids.forEach(a => {
+                  a.x += a.vx; a.y += a.vy; a.rot += a.rotSpd;
+                  drawAsteroid(a);
+                  // Collision
+                  const dx = a.x - ship.x, dy = a.y - ship.y;
+                  if (Math.sqrt(dx * dx + dy * dy) < a.r * 0.7 + 10) {
+                    spawnParticles(ship.x, ship.y, '#ff453a');
+                    a.y = H + 100; lives--;
+                    if (lives <= 0) gameOver = true;
+                  }
+                });
+
+                // Particles
+                particles = particles.filter(p => p.life > 0);
+                particles.forEach(p => {
+                  p.x += p.vx; p.y += p.vy; p.life -= 0.04; p.vy += 0.08;
+                  ctx.globalAlpha = p.life;
+                  ctx.fillStyle = p.color;
+                  ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+                  ctx.globalAlpha = 1;
+                });
+
+                // Ship
+                drawShip(ship.x, ship.y);
+
+                // Lives
+                for (let i = 0; i < 3; i++) {
+                  ctx.globalAlpha = i < lives ? 1 : 0.18;
+                  ctx.fillStyle = '#ff453a';
+                  ctx.font = '14px system-ui';
+                  ctx.fillText('\u2665', 8 + i * 20, 22);
+                }
+                ctx.globalAlpha = 1;
+              }
+
+              loop();
+            }
     }
 
     // Bootstrap

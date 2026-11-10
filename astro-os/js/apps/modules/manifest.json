@@ -2,7 +2,7 @@
   "id": "com.astroos.modules",
   "name": "Modules",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Reload JavaScript modules in the running OS without a full restart.",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",

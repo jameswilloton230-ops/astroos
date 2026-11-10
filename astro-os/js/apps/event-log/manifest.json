@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.event-log",
   "name": "Event Log",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Collects and records system events for diagnostics and the Events app.",
   "version": "3.0.2",
   "entry": "service.js",

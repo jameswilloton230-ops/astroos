@@ -2,7 +2,7 @@
   "id": "com.astroos.downloads",
   "name": "Downloads",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "View and manage files downloaded through AstroOS.",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",

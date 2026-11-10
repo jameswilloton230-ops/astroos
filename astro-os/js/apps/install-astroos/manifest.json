@@ -2,7 +2,7 @@
   "id": "com.astroos.install",
   "name": "Install AstroOS",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Install AstroOS to a selected disk.",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",

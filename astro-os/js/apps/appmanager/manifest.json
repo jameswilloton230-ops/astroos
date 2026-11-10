@@ -3,7 +3,7 @@
   "name": "App Manager",
   "version": "3.0.2",
   "description": "Install and manage AstroOS apps, including .novaapp packages and web apps.",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",
   "icon": "package",

@@ -3,7 +3,7 @@
   "name": "Store",
   "version": "3.0.2",
   "description": "Browse, verify, and install apps for AstroOS.",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",
   "icon": "shop",

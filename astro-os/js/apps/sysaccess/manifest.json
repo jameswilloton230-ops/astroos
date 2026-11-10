@@ -2,7 +2,7 @@
   "id": "com.astroos.sysaccess",
   "name": "System Access",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Inspect network proxy settings and the AstroOS virtual filesystem.",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",

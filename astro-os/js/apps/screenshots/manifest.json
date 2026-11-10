@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.screenshots",
   "name": "Screenshots",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Captures the desktop, windows, or a selected screen region into Pictures.",
   "version": "3.0.2",
   "entry": "service.js",

@@ -2,7 +2,7 @@
   "id": "com.astroos.permissions",
   "name": "Permissions",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Review and manage permissions requested by registered apps.",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",

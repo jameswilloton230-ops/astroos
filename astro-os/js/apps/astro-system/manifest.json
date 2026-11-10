@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.astro-system",
   "name": "Astro System",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Coordinates system preferences, security policy, and guest hardware controls through OS services.",
   "version": "3.0.2",
   "entry": "service.js",

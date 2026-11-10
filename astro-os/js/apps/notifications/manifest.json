@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.notifications",
   "name": "Notifications",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Provides the system notification service used by apps and OS components.",
   "version": "3.0.2",
   "entry": "service.js",

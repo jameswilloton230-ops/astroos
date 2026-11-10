@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.easteregg",
   "name": "AstroOS Easter Egg",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Provides the hidden, full-screen AstroOS Snake Easter egg.",
   "version": "3.0.2",
   "entry": "service.js",

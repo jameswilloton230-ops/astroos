@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.tray",
   "name": "System Tray",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Provides network, volume, battery, clock, and calendar tray controls.",
   "version": "3.0.2",
   "entry": "service.js",

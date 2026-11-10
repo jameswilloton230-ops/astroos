@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.wallpaper",
   "name": "Wallpaper",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Applies built-in and custom desktop wallpapers across the AstroOS shell.",
   "version": "3.0.2",
   "entry": "service.js",

@@ -2,7 +2,7 @@
   "id": "com.astroos.packages",
   "name": "Packages",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Sign and verify AstroOS app packages and their integrity metadata.",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",

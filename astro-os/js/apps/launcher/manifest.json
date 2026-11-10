@@ -3,7 +3,7 @@
   "name": "Launcher",
   "version": "3.0.2",
   "description": "The AstroOS desktop shell for accessing apps and the operating system.",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",
   "icon": "home",

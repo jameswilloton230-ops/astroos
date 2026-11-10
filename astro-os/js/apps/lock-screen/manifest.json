@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.lock-screen",
   "name": "Lock Screen",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Manages session locking, PIN and biometric unlock, and idle-lock behavior.",
   "version": "3.0.2",
   "entry": "service.js",

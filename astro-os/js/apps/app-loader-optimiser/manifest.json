@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.app-loader-optimiser",
   "name": "App Loader Optimiser",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Preloads bundled NovaApp packages concurrently and reuses unchanged packages from persistent local storage.",
   "version": "3.0.2",
   "entry": "service.js",

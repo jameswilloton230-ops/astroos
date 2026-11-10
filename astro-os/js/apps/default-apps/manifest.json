@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.default-apps",
   "name": "Default Apps",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Routes supported links and file types to their configured default apps.",
   "version": "3.0.2",
   "entry": "service.js",

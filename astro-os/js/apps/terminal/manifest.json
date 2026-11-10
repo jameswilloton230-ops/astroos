@@ -3,7 +3,7 @@
   "name": "Terminal",
   "version": "3.0.2",
   "description": "Run commands and interact with AstroOS through the terminal.",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",
   "icon": "terminal",

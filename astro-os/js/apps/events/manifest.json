@@ -2,7 +2,7 @@
   "id": "com.astroos.events",
   "name": "Events",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Review a unified timeline of console output, permission activity, and package events.",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",

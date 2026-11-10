@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.search-index",
   "name": "Search Index Service",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Provides reusable trigram indexing and search for system apps.",
   "version": "3.0.2",
   "entry": "service.js",

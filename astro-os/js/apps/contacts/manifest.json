@@ -2,7 +2,7 @@
   "id": "com.astroos.contacts",
   "name": "Contacts",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Save and organize your contacts in one place.",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",

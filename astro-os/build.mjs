@@ -118,7 +118,7 @@ async function main() {
         LSApplicationCategoryType: "public.app-category.developer-tools",
         CFBundleVersion: "3.0.2",
         CFBundleShortVersionString: "3.0.2",
-        NSHumanReadableCopyright: "Copyright © 2026 DirazCoder"
+        NSHumanReadableCopyright: "Copyright © 2026 jameswilloton230-ops"
       })
     }
   };

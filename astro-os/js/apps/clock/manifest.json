@@ -2,7 +2,7 @@
   "id": "com.astroos.clock",
   "name": "Clock",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Keep time, set alarms, and use the timer and stopwatch.",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",

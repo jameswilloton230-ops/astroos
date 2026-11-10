@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.calendar-notifier",
   "name": "Calendar Notifier Service",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Delivers notifications for scheduled calendar events.",
   "version": "3.0.2",
   "entry": "service.js",

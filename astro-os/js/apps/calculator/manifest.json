@@ -2,7 +2,7 @@
   "id": "com.astroos.calculator",
   "name": "Calculator",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Perform everyday calculations with AstroOS's built-in calculator.",
   "entry": "index.html",
   "icon": "calculator",

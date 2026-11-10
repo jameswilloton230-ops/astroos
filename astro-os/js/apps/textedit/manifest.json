@@ -2,7 +2,7 @@
   "id": "com.astroos.textedit",
   "name": "TextEdit",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Edit plain-text files with line numbers, bracket matching, and word count.",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",

@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.server-events-bridge",
   "name": "Server Events Bridge",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Connects server-side events to the AstroOS event system.",
   "version": "3.0.2",
   "entry": "service.js",

@@ -2,7 +2,7 @@
   "id": "com.astroos.calendar",
   "name": "Calendar",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Create and manage calendar events and schedules.",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",

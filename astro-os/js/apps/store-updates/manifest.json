@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.store-updates",
   "name": "Store Update Service",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Checks installed apps for updates and notifies the user.",
   "version": "3.0.2",
   "entry": "service.js",

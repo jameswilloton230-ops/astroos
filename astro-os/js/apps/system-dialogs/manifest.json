@@ -1,7 +1,7 @@
 {
   "id": "com.astroos.service.system-dialogs",
   "name": "System Dialogs Service",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Provides shared system dialogs and user prompts to OS components.",
   "version": "3.0.2",
   "entry": "service.js",

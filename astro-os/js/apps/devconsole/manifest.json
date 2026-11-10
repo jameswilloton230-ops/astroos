@@ -2,7 +2,7 @@
   "id": "com.astroos.devconsole",
   "name": "Console",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Run JavaScript directly in the AstroOS context for development and debugging.",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",

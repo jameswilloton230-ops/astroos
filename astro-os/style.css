@@ -2938,3 +2938,74 @@ select:focus {
   font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   color: #4dd0e1;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AstroOS custom UI — global rounded (ported from the main-old release)
+   The --r-* radius scale ships with the tokens; this applies it to the
+   remaining sharp surfaces so the whole shell follows one rounded language:
+   windows 16, menus/cards 20, controls 12, items 8, pills 999.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.context-menu {
+  border-radius: var(--r-lg) !important;
+}
+
+.tray-menu {
+  border-radius: var(--r-lg) !important;
+}
+
+.tray-menu-item {
+  border-radius: var(--r-xs) !important;
+}
+
+.nova-select-option {
+  border-radius: var(--r-xs) !important;
+}
+
+.notif-item-dismiss {
+  border-radius: var(--r-xs) !important;
+}
+
+.speed-dial-tile {
+  border-radius: var(--r-md) !important;
+}
+
+.nook-row.clickable {
+  border-radius: var(--r-sm) !important;
+}
+
+.nook-about-version {
+  border-radius: var(--r-md) !important;
+}
+
+#debug-overlay {
+  border-radius: var(--r-sm) !important;
+}
+
+.system-file-dialog-nav-btn,
+.system-file-dialog-path {
+  border-radius: var(--r-sm) !important;
+}
+
+.system-file-dialog-item {
+  border-radius: var(--r-xs) !important;
+}
+
+.snake-modal {
+  border-radius: var(--r-lg) !important;
+}
+
+.snake-close,
+.snake-restart-btn,
+.snake-controls kbd {
+  border-radius: var(--r-xs) !important;
+}
+
+.snake-score-board,
+.snake-canvas {
+  border-radius: var(--r-sm) !important;
+}
+
+.snake-game-over {
+  border-radius: var(--r-md) !important;
+}

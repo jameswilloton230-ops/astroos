@@ -2,7 +2,7 @@
   "id": "com.astroos.novareg",
   "name": "NovaReg",
   "version": "3.0.2",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "description": "Edit the AstroOS Registry — the hierarchical configuration database the OS is driven by. (default) values, REG_MULTI_SZ/REG_EXPAND_SZ, links, per-key ACLs, audit, snapshots, .nvreg files, find & favorites.",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",

@@ -3,7 +3,7 @@
   "name": "Email",
   "version": "3.0.2",
   "description": "Connect supported IMAP, POP3, and Exchange accounts to read and send email.",
-  "author": "DirazCoder",
+  "author": "jameswilloton230-ops",
   "entry": "index.html",
   "unrestrictedEntry": "app.js",
   "icon": "mail",
