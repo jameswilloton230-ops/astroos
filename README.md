@@ -7,19 +7,19 @@
 # AstroOS
 
 **A NBOSP fork with a full LineageOS-inspired reskin, Material icons throughout,**
-**and our own customisations re-applied on top of NBOSP's 3.0.2 core rewrite.**
+**and our customisations re-applied on top of the current NBOSP main (November 2026 sync).**
 
 <br>
 
-[![Fork of NBOSP](https://img.shields.io/badge/Fork_of-NBOSP-22c55e?style=flat-square)](https://github.com/NovaByteTeam/novabyte-os/tree/main/NBOSP)
+[![Fork of NBOSP](https://img.shields.io/badge/Fork_of-NBOSP-22c55e?style=flat-square)](https://github.com/NovaByteTeam/novabyte-os)
 [![v3.0.2](https://img.shields.io/badge/v3.0.2-Beta-f59e0b?style=flat-square)](#status)
 [![Node](https://img.shields.io/badge/Node.js-22+-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
-[![Security Patch Level](https://img.shields.io/badge/Security_Patch_Level-2026--06--03-22c55e?style=flat-square)](#security)
+[![ISO Build](https://github.com/jameswilloton230-ops/astroos/actions/workflows/nbosp-os-iso.yml/badge.svg)](https://github.com/jameswilloton230-ops/astroos/actions/workflows/nbosp-os-iso.yml)
 [![License](https://img.shields.io/badge/License-MIT_%2B_Apache_2.0-22c55e?style=flat-square)](#license)
 
 <br>
 
-[**About**](#about) · [**What's New in 3.0.2**](#whats-new-in-302) · [**Design**](#design--lineageos-style--material-icons) · [**Getting Started**](#getting-started) · [**Permissions**](#permission-layer) · [**Architecture**](#architecture-notes) · [**Status**](#status) · [**Contributing**](#contributing--issues) · [**License**](#license)
+[**About**](#about) · [**What's New in This Sync**](#whats-new-in-this-sync) · [**Running AstroOS**](#running-astroos-dev) · [**Building the ISO**](#building-the-bootable-iso) · [**Design**](#design--lineageos-style--material-icons) · [**Permissions**](#permission-layer) · [**Architecture**](#architecture-notes) · [**Status**](#status) · [**Contributing**](#contributing--issues) · [**License**](#license)
 
 </div>
 
@@ -27,44 +27,87 @@
 
 ## About
 
-AstroOS is a fork of **NBOSP (NovaByte Open Source Project)** — a heavy reskin rather than a from-scratch OS. The base architecture, server, security runtime, and app logic all come from NBOSP. On top of that, AstroOS applies:
+AstroOS is a fork of **NBOSP (NovaByte Open Source Project)** — a heavy reskin rather than a from-scratch OS. The base architecture, server, security runtime, permission system, bootable OS image, and app logic all come from NBOSP. On top of that, AstroOS applies:
 
 - A **LineageOS-inspired visual style** across the entire shell and every app
 - **Material icons** applied system-wide, replacing the stock NBOSP icon set
-- Our own accumulated customisations, carried forward from earlier AstroOS releases
+- Our own accumulated customisations, re-applied on every sync
 
 If you want the bare, unstyled foundation, go use NBOSP directly. AstroOS exists for people who want that foundation with a different visual identity already applied.
 
+> [!NOTE]
+> This branch (`latest`) also retires the old repo layout. Earlier AstroOS releases lived in a standalone `astro-os/` snapshot that shared no git history with upstream, which made every sync a manual, grep-heavy port. The tree now mirrors NBOSP's own layout (`NBOSP/`, `supabase/`, `NOVAAPP.md`, …) with our customisations applied as a clean diff on top — future upstream syncs are real merges instead of archaeology. The old layout is preserved on the `main` branch.
+
 -----
 
-## What's New in 3.0.2
+## What's New in This Sync
 
-This is described internally as the biggest update AstroOS has shipped. NBOSP itself went through a massive refactor between its 3.0.1 and 3.0.2 lines — core files and effectively every NBOSP app were rewritten. Because AstroOS sits on top of NBOSP rather than alongside it, that refactor meant migrating all of our existing customisations (styling, icon overrides, prior tweaks) back onto the new NBOSP base by hand. It was a slow, grep-heavy process, but it's done and AstroOS 3.0.2 is built on the new NBOSP core.
+This is a full re-sync onto **NBOSP main as of November 2026** — by far the largest content update yet (600+ files changed against the previous AstroOS release). Everything below came in from upstream; the AstroOS layer was then re-applied on top as a clean diff of roughly 30 files.
 
-**What we inherited from the NBOSP 3.0.2 refactor:**
+### Inherited from upstream (NBOSP main)
 
-- 200+ vulnerability and security fixes — we went through all ~70 commits NBOSP made since our last clone to migrate our customisations forward, and the sheer number of files touched for security/audit fixes alone made an exact count impractical to list here
-- Wide rewrites across core files and NBOSP apps
-- A substantial number of memory leak fixes
-- General best-practice and performance/efficiency cleanup, plus assorted bug fixes
-- `npm start` now bootstraps itself — it auto-generates `.env` and self-signed certs on first run instead of requiring manual setup
-- Dependency bumps across the board to latest versions
-- A **new system-wide permission layer** — every app, including stock NBOSP apps, now has to request permission before it can do anything. We did not strip this out; it's intact in AstroOS. See [Permission Layer](#permission-layer) below.
-- A new **Apps** section inside Settings for managing those per-app permissions
-- Large round of browser bug fixes (see below)
-- **`.novaapp` packages now run in WebView instead of iframe.** Iframe rendering for `.novaapp` was less secure and frequently didn't work at all. Every app built for NovaByte OS that ships as `.novaapp` now runs correctly under AstroOS as a result.
-- Security patch level bumped from `2026-05-01` to `2026-06-03`
+- **A bootable OS image.** NBOSP now builds a real x86_64 live ISO via Buildroot: BusyBox init, a Wayland kiosk running in Cage, Linux DRM/KMS with the VMware SVGA driver and Mesa for a graphical desktop in VMs, with the NW.js bundle as the main OS interface. Files can browse the host filesystem and launch executables as the unprivileged kiosk user (after confirmation), the Linux Terminal runs through `/bin/sh`, `curl` is included, sandboxed apps get a system file picker, and per-app sandbox data lives under `~/.local/share/novabyte/` with a one-time legacy data import on first boot. See `NBOSP/os/README.md` for the details.
+- **The ISO builds in CI.** The `Build NBOSP OS ISO` workflow (manual trigger) runs the whole pipeline on GitHub's `ubuntu-latest` runners — integration tests included — and uploads the image as the `nbosp-live-x86_64` artifact. See [Building the ISO](#building-the-bootable-iso).
+- **System Webview service.** A trusted first-party guest API now exists, the Browser app has been moved onto it, and web apps build their guests through the System Webview service instead of hand-rolling embedding.
+- **Permission system upgrades.** App manifests must now declare `permissionReasons` for every permission they request — those reasons are shown on the first-launch gate, `vfs:*` aliases resolve to real labels in the permission dialog, and filesystem read errors no longer render as `[object Object]`.
+- **Store / publisher hardening.** Signed templates are verified end-to-end (Base64 signed templates are accepted by the reviewer upload form, decode failures now say what's actually wrong, and reviewed templates are no longer stored as all-zero files), the review form gained a reviewer safety-confidence slider (1–100%), the publisher API was audited and hardened with a full test suite, and catalog ratings landed.
+- **Sandbox fix.** `nova:fs:write` serialises object content on every branch, so writing objects no longer produces garbage.
+- **OS build toolchain fixes.** `host-m4` bumped to 1.4.21, a `HOSTCC` wrapper forces `gnu17` for host tools, and the gnulib `gl_avltree_oset` build failure on GCC 13 / current `ubuntu-latest` images is fixed — which is what makes the Buildroot ISO build work on modern CI at all.
 
-**What NBOSP removed that we kept:**
+### The AstroOS layer (re-applied and extended)
 
-- NBOSP removed `user-power-menu.js` in this cycle. It was broken in NBOSP anyway, so we don't know their exact reasoning — but AstroOS still has our own working version of it, since it shipped fine on our side.
+- **LineageOS-style theming** re-applied across the shell and apps — `style.css` alone grew by ~400 lines against upstream, plus re-theming of `index.html`, the launcher, and the calculator
+- **Launcher rework** — custom layout and behaviour on top of the upstream launcher
+- **Calculator extensions** — extra functionality beyond stock NBOSP's calculator
+- **Wallpaper and system-events services** — AstroOS-specific tweaks to both
+- **Window manager tweaks** in the shell UI (`wm.js`)
+- **Material icons** system-wide, and AstroOS branding (logo, app icon)
+- **Default server port moved to 3006** (upstream ships 3003) — reflected in `NBOSP/.env.example`
 
-### Browser fixes
+-----
 
-The in-app browser had a rough run leading into this release — iframe-mode rendering had a number of long-standing issues. Most of those are resolved in 3.0.2:
+## Running AstroOS (dev)
 
-- iframe mode is mostly fixed and significantly more stable than before
-- `.novaapp` apps moved from iframe to WebView (see above), which was the bigger fix overall
+```bash
+git clone https://github.com/jameswilloton230-ops/astroos
+cd astroos/NBOSP
+npm start
+```
+
+`npm start` handles first-run setup automatically — it checks for `node_modules`, installs dependencies if missing, generates a `.env`, and generates self-signed certs if they don't already exist. No separate `npm install` step needed.
+
+Once running, the desktop is served at **`https://localhost:3006`** (AstroOS's default port — change it in `.env` if it collides with something).
+
+> [!IMPORTANT]
+> **AstroOS is currently in beta and active development.** Expect rough edges. If something breaks, that's expected at this stage — see [Contributing](#contributing--issues) below for how to report it.
+
+-----
+
+## Building the Bootable ISO
+
+There are two ways to get a bootable AstroOS/NBOSP image:
+
+### Via GitHub Actions (recommended)
+
+1. Open the **Actions** tab on the repo and enable workflows if GitHub shows the "workflows are disabled" banner (forks start with Actions disabled).
+2. Select **Build NBOSP OS ISO** → **Run workflow** → pick the `latest` branch.
+3. Wait. The workflow runs integration tests (kiosk contract tests, NW.js Node integration under Xvfb), builds the Linux NW.js app, then builds the Buildroot image — it can take a while (the job allows up to 3 hours).
+4. Download the **`nbosp-live-x86_64`** artifact from the finished run (retained for 14 days) and flash/boot the ISO in a VM or on bare metal. It boots to the Cage kiosk desktop with the AstroOS UI.
+
+No self-hosted runner or special hardware is needed — it runs entirely on GitHub's hosted `ubuntu-latest` runners, with Buildroot sources and build output cached between runs.
+
+### Locally
+
+Buildroot must be built on a Linux host (on Windows, use WSL2 with Ubuntu and keep the tree in the WSL filesystem). Install the host dependencies listed in `NBOSP/os/README.md`, then:
+
+```bash
+bash NBOSP/os/build-iso.sh
+```
+
+The finished image lands at `NBOSP/os/output/images/nbosp-live.iso`. Full build docs, dependency lists, and image behaviour notes live in [`NBOSP/os/README.md`](./NBOSP/os/README.md).
+
+> [!NOTE]
+> The repo also carries a **Deploy static content to Pages** workflow. It only triggers on pushes to the `main` branch, so syncing or building on `latest` won't fire a Pages deployment.
 
 -----
 
@@ -74,33 +117,20 @@ AstroOS's defining difference from stock NBOSP is visual, not functional:
 
 - **LineageOS-style theming** applied across the shell, window chrome, and every bundled app
 - **Material icons** replacing the stock icon set system-wide — taskbar, app launcher, Settings, file types, everything
-- This is a reskin layered on top of NBOSP's behavior, not a behavioral fork. App functionality, the VFS, the permission system, and the server architecture are all NBOSP's; the look is ours
+- This is a reskin layered on top of NBOSP's behaviour, not a behavioural fork. App functionality, the VFS, the permission system, the bootable image, and the server architecture are all NBOSP's; the look is ours
 
 > [!NOTE]
-> Because NBOSP Settings is the one app that keeps receiving feature/visual updates upstream (it controls OS-wide visual identity), every NBOSP refactor to Settings is something we have to re-theme on our end. That's most of where the "massive rewrites" pain came from this cycle.
-
------
-
-## Getting Started
-
-```bash
-git clone https://github.com/jameswilloton230-ops/astroos
-cd astroos
-npm start
-```
-
-`npm start` handles first-run setup automatically — it checks for `node_modules`, installs dependencies if missing, generates a `.env`, and generates self-signed certs if they don't already exist. No separate `npm install` step needed.
-
-> [!IMPORTANT]
-> **AstroOS is currently in beta and active development.** Expect rough edges. If something breaks, that's expected at this stage — see [Contributing](#contributing--issues) below for how to report it.
+> NBOSP Settings is the one app that keeps receiving feature/visual updates upstream (it controls OS-wide visual identity), so every upstream refactor to Settings is something we re-theme on our end each sync.
 
 -----
 
 ## Permission Layer
 
-NBOSP 3.0.2 introduced a system-wide permission model: every app — including stock NBOSP apps, not just third-party `.novaapp` packages — now has to request and be granted permission before it can do anything. AstroOS kept this as-is rather than removing or weakening it.
+NBOSP introduced a system-wide permission model: every app — including stock NBOSP apps, not just third-party `.novaapp` packages — has to request and be granted permission before it can do anything. AstroOS keeps this as-is rather than removing or weakening it.
 
-You can manage this from **Settings → Apps**:
+This sync picked up upstream's improvements to it: manifests now declare **`permissionReasons`** for every requested permission, and those reasons are surfaced on the first-launch gate instead of a blank "allow?" prompt.
+
+You can manage everything from **Settings → Apps**:
 
 - See every installed app (NBOSP apps, web apps, and `.novaapp` packages) with its current permission state
 - Sensitive permissions are called out separately from automatic/low-risk ones
@@ -111,15 +141,21 @@ You can manage this from **Settings → Apps**:
 
 ## Architecture Notes
 
-AstroOS doesn't restructure NBOSP's backend — we build on top of its existing modular `server/` split (core, routes, middleware, SSL/env handling, proxies) rather than maintaining a separate server architecture. Our work this cycle was almost entirely about re-locating and re-applying our styling and customisation layer inside that structure after NBOSP's reorganization, not about changing how the server itself works.
+AstroOS doesn't restructure NBOSP — we build on top of what's already there:
 
-If you're trying to find where AstroOS-specific code lives versus stock NBOSP code, expect to grep for it — that's exactly what we had to do to migrate our own changes forward, and the layout reflects NBOSP's structure more than a custom AstroOS one.
+- **`NBOSP/server/`** — the modular server split (core, routes, middleware, SSL/env handling, proxies), untouched in shape; AstroOS's only server-side deltas are port defaults and small tweaks
+- **`NBOSP/js/`** — the client platform: app registry, app packaging, and the permission manager under `js/platform/`, with each app self-contained under `js/apps/`
+- **`NBOSP/os/`** — the bootable OS side: Buildroot config, board files, the Cage kiosk packaging (`nbosp-kiosk`), installer and power packages, patches, and `build-iso.sh`
+- **`supabase/`** — the store/publisher backend (edge functions and SQL migrations, including catalog ratings)
+- **[`NOVAAPP.md`](./NOVAAPP.md)** — the `.novaapp` package format and the sandboxed APIs available to third-party apps
+
+If you're trying to find where AstroOS-specific code lives versus stock NBOSP code: our layer is intentionally a small, clean diff on top of upstream, but expect to grep for it — the layout reflects NBOSP's structure, not an AstroOS-shaped one.
 
 -----
 
 ## Status
 
-AstroOS is **beta / active development**. Versioning currently tracks NBOSP's own version numbers (this release is 3.0.2). Expect bugs, incomplete theming in newer NBOSP-added surfaces, and behavior that may shift before a stable release.
+AstroOS is **beta / active development**. Versioning tracks NBOSP's own version numbers — this release sits on the NBOSP **3.0.2** line with upstream main as of November 2026 merged in. Branch layout: **`latest`** is this synced branch; **`main`** preserves the previous AstroOS release layout. Expect bugs, incomplete theming in newer NBOSP-added surfaces, and behaviour that may shift before a stable release.
 
 -----
 
@@ -128,7 +164,7 @@ AstroOS is **beta / active development**. Versioning currently tracks NBOSP's ow
 This is an open project and contributions are welcome.
 
 - **Found a bug or have a fix?** Open an issue or PR on the [repo](https://github.com/jameswilloton230-ops/astroos).
-- **Security issues:** please use the **private issues tab** rather than filing a public issue, so problems aren't disclosed before there's a fix.
+- **Security issues:** please use the **private security advisories** rather than filing a public issue, so problems aren't disclosed before there's a fix.
 
 -----
 
@@ -138,10 +174,10 @@ AstroOS uses two licenses, split by where the code came from:
 
 | Code | License |
 |------|---------|
-| Inherited NBOSP code (core, server, stock apps) | **Apache 2.0** — NBOSP's original license, preserved as required |
-| AstroOS-authored code (reskin, theming, Material icon set, permission manager, and other AstroOS customisations) | **MIT** |
+| Inherited NBOSP code (core, server, stock apps, OS image) | **Apache 2.0** — preserved in [`NBOSP/LICENSE-APACHE`](./NBOSP/LICENSE-APACHE) |
+| AstroOS-authored code (reskin, theming, Material icon set, launcher and app customisations, branding) | **MIT** — see [`LICENSE`](./LICENSE) |
 
-NBOSP's copyright notices and Apache 2.0 license text are preserved wherever NBOSP code is used, per its licensing terms. Code written by AstroOS is licensed under MIT — see `LICENSE` in the repo for the full text.
+NBOSP's copyright notices and Apache 2.0 license text are preserved wherever NBOSP code is used, per its licensing terms. Code written by AstroOS is licensed under MIT.
 
 -----
 
