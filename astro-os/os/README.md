@@ -124,7 +124,7 @@ The boot command line keeps the VMware `e1000` interface named `eth0` and makes
 the serial console the userspace console so init and
 kiosk startup messages are captured by a configured VMware serial port.
 
-The manual GitHub Actions workflow runs `npm ci` in `AstroOS`, builds the Linux
+The manual GitHub Actions workflow runs `npm ci` in `astro-os`, builds the Linux
 x64 NW.js application, adjusts its window settings for fullscreen Cage kiosk
 mode using XWayland, and installs the complete app bundle into the ISO at
 `/opt/astroos`.

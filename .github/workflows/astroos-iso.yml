@@ -30,7 +30,7 @@ jobs:
             nwjs-sdk-${{ runner.os }}-
 
       - name: Install AstroOS dependencies
-        working-directory: AstroOS
+        working-directory: astro-os
         run: npm ci
 
       - name: Verify AstroOS OS integration contracts
@@ -39,17 +39,17 @@ jobs:
           astro-os/os/package/astroos-kiosk/test-cage-kiosk.mjs
 
       - name: Build Linux NW.js app
-        working-directory: AstroOS
+        working-directory: astro-os
         run: node build.mjs linux
 
       - name: Verify Linux NW.js runtime libraries
-        run: test -f build/linux-x64/lib/libffmpeg.so
+        run: test -f astro-os/build/linux-x64/lib/libffmpeg.so
 
       - name: Prepare NW.js app for Wayland kiosk
         run: |
-          node astro-os/os/package/astroos-kiosk/prepare-kiosk.mjs build/linux-x64
+          node astro-os/os/package/astroos-kiosk/prepare-kiosk.mjs astro-os/build/linux-x64
           mkdir -p astro-os/os/package/astroos-kiosk/source
-          cp -a build/linux-x64/. astro-os/os/package/astroos-kiosk/source/
+          cp -a astro-os/build/linux-x64/. astro-os/os/package/astroos-kiosk/source/
 
       - name: Install Xvfb
         run: |
@@ -57,7 +57,7 @@ jobs:
           sudo apt-get install -y xvfb
 
       - name: Verify NW.js Node integration under Xvfb
-        run: xvfb-run -a node astro-os/os/package/astroos-kiosk/test-nw-node.mjs build/linux-x64/AstroOS build/linux-x64/package.nw
+        run: xvfb-run -a node astro-os/os/package/astroos-kiosk/test-nw-node.mjs astro-os/build/linux-x64/AstroOS astro-os/build/linux-x64/package.nw
 
       - name: Install Buildroot and ISO host dependencies
         run: |
