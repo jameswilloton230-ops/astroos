@@ -1,0 +1,103 @@
+[
+  {
+    "id": "com.astroos.service.app-loader-optimiser",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.astro-system",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.shell-ui",
+    "entry": "wm.js",
+    "scripts": ["wm.js", "menu.js", "modals.js", "desktop.js"]
+  },
+  {
+    "id": "com.astroos.service.event-log",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.downloads-history",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.search-index",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.media-store",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.network-activity-log",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.notifications",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.store-updates",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.scanner",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.system-dialogs",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.registry",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.default-apps",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.background-apps",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.server-events-bridge",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.calendar-notifier",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.wallpaper",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.system-webview",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.easteregg",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.tray",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.screenshots",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.lock-screen",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.debug-overlay",
+    "entry": "service.js"
+  },
+  {
+    "id": "com.astroos.service.system-events",
+    "entry": "service.js"
+  }
+]

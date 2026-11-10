@@ -1,0 +1,11 @@
+{
+  "id": "com.astroos.service.system-events",
+  "name": "System Events Service",
+  "author": "DirazCoder",
+  "description": "Dispatches and coordinates system-wide lifecycle and application events.",
+  "version": "3.0.2",
+  "entry": "service.js",
+  "unrestrictedEntry": "service.js",
+  "system": true,
+  "systemService": true
+}

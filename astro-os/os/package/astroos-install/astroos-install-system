@@ -1,0 +1,199 @@
+#!/bin/sh
+set -eu
+
+DEVICE="${1:-}"
+case "$DEVICE" in
+	/dev/sd[a-z]|/dev/vd[a-z]|/dev/nvme[0-9]*n[0-9]*|/dev/mmcblk[0-9]*) ;;
+	*) echo "Unsupported install target: $DEVICE" >&2; exit 2 ;;
+esac
+[ "$(id -u)" -eq 0 ] || { echo "Installer must run as root" >&2; exit 1; }
+[ -b "$DEVICE" ] || { echo "Install target is not a block device: $DEVICE" >&2; exit 2; }
+
+WORK=/run/astroos-installer
+MEDIA="$WORK/media"
+ROOT="$WORK/root"
+EFI="$ROOT/boot/efi"
+PARTITIONS="$WORK/partitions"
+MOUNTPOINTS="$WORK/mountpoints"
+mkdir -p "$MEDIA" "$ROOT"
+mounted_root=
+mounted_efi=
+mounted_media=
+
+cleanup() {
+	result=$?
+	trap - EXIT
+	if [ -n "$mounted_efi" ] && ! umount "$EFI"; then
+		echo "Could not unmount the EFI partition at $EFI" >&2
+		result=1
+	fi
+	if [ -n "$mounted_root" ] && ! umount "$ROOT"; then
+		echo "Could not unmount the system partition at $ROOT" >&2
+		result=1
+	fi
+	if [ -n "$mounted_media" ] && ! umount "$MEDIA"; then
+		echo "Could not unmount the boot media at $MEDIA" >&2
+		result=1
+	fi
+	exit "$result"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+lsblk -nrpo NAME "$DEVICE" > "$PARTITIONS" || {
+	echo "Could not inspect the selected disk" >&2
+	exit 1
+}
+lsblk -nrpo MOUNTPOINT "$DEVICE" > "$MOUNTPOINTS" || {
+	echo "Could not inspect disk mountpoints" >&2
+	exit 1
+}
+if grep -q '[^[:space:]]' "$MOUNTPOINTS"; then
+	echo "Refusing to erase a disk with mounted filesystems" >&2
+	exit 1
+fi
+while IFS= read -r node; do
+	if awk -v node="$node" '$1 == node { found = 1 } END { exit !found }' /proc/mounts; then
+		echo "Refusing to erase a disk with a mounted filesystem: $node" >&2
+		exit 1
+	fi
+done < "$PARTITIONS"
+
+ARCHIVE=
+for optical in /dev/sr*; do
+	[ -b "$optical" ] || continue
+	if mount -o ro "$optical" "$MEDIA" 2>/dev/null; then
+		mounted_media=1
+		if [ -f "$MEDIA/astroos/rootfs.tar.gz" ]; then
+			ARCHIVE="$MEDIA/astroos/rootfs.tar.gz"
+			break
+		fi
+		umount "$MEDIA"
+		mounted_media=
+	fi
+done
+[ -n "$ARCHIVE" ] || {
+	echo "Could not find the AstroOS installation image on the boot media" >&2
+	exit 1
+}
+[ -f "$MEDIA/boot/vmlinuz" ] || {
+	echo "The boot media is missing its Linux kernel" >&2
+	exit 1
+}
+[ -f "$MEDIA/astroos/rootfs-size" ] || {
+	echo "The boot media is missing the root filesystem size metadata" >&2
+	exit 1
+}
+ROOTFS_BYTES="$(cat "$MEDIA/astroos/rootfs-size")"
+case "$ROOTFS_BYTES" in
+	''|*[!0-9]*) echo "Invalid root filesystem size metadata" >&2; exit 1 ;;
+esac
+DISK_BYTES="$(lsblk -b -dn -o SIZE "$DEVICE" | tr -d '[:space:]')"
+case "$DISK_BYTES" in
+	''|*[!0-9]*) echo "Could not determine the selected disk size" >&2; exit 1 ;;
+esac
+MINIMUM_BYTES=$((ROOTFS_BYTES + 1073741824))
+[ "$DISK_BYTES" -ge "$MINIMUM_BYTES" ] || {
+	echo "The selected disk is too small for the system image and working space" >&2
+	exit 1
+}
+gzip -t "$ARCHIVE" || {
+	echo "The AstroOS system archive is damaged or incomplete" >&2
+	exit 1
+}
+gzip -dc "$ARCHIVE" | tar -tf - > /dev/null || {
+	echo "The AstroOS system archive is not a readable tar archive" >&2
+	exit 1
+}
+
+echo "Erasing and partitioning $DEVICE"
+sfdisk --wipe always --wipe-partitions always "$DEVICE" <<'PARTITIONS'
+label: gpt
+unit: sectors
+start=2048, size=2048, type=21686148-6449-6E6F-744E-656564454649
+start=4096, size=1048576, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B
+start=1052672, type=L
+PARTITIONS
+udevadm settle
+
+case "$DEVICE" in
+	/dev/nvme*|/dev/mmcblk*) EFI_PART="${DEVICE}p2"; ROOT_PART="${DEVICE}p3" ;;
+	*) EFI_PART="${DEVICE}2"; ROOT_PART="${DEVICE}3" ;;
+esac
+attempt=0
+while [ ! -b "$EFI_PART" ] || [ ! -b "$ROOT_PART" ]; do
+	attempt=$((attempt + 1))
+	[ "$attempt" -lt 30 ] || {
+		echo "The new disk partitions did not appear" >&2
+		exit 1
+	}
+	sleep 1
+	udevadm settle
+done
+
+echo "Formatting the AstroOS system partition"
+mkfs.vfat -F 32 "$EFI_PART"
+mkfs.ext4 -F "$ROOT_PART"
+ROOT_UUID="$(blkid -s UUID -o value "$ROOT_PART")"
+[ -n "$ROOT_UUID" ] || {
+	echo "Could not determine the new system filesystem UUID" >&2
+	exit 1
+}
+ROOT_PARTUUID="$(blkid -s PARTUUID -o value "$ROOT_PART")"
+[ -n "$ROOT_PARTUUID" ] || {
+	echo "Could not determine the new system partition UUID" >&2
+	exit 1
+}
+
+mount "$ROOT_PART" "$ROOT"
+mounted_root=1
+mkdir -p "$EFI"
+mount "$EFI_PART" "$EFI"
+mounted_efi=1
+
+echo "Copying the AstroOS system files"
+gzip -dc "$ARCHIVE" | tar -xf - -C "$ROOT"
+
+echo "Removing installer from installed system"
+NOVAAPP="$ROOT/opt/astroos/package.nw/js/apps/com.astroos.install.novaapp"
+MANIFEST="$ROOT/opt/astroos/package.nw/js/apps/novaapp-manifest.json"
+rm -f "$NOVAAPP"
+if [ -f "$MANIFEST" ]; then
+  # Remove the 5-line entry block for com.astroos.install from the manifest.
+  # Format is consistent: {, "id", "file", "cacheKey", } — use grep to
+  # strip all lines that reference this app id or its .novaapp file.
+  grep -v '"com\.astroos\.install"' "$MANIFEST" \
+    | grep -v '"js/apps/com\.astroos\.install\.novaapp"' \
+    | grep -v '"cacheKey".*3358478e' \
+    > "$MANIFEST.tmp" && mv "$MANIFEST.tmp" "$MANIFEST" || rm -f "$MANIFEST.tmp"
+fi
+
+mkdir -p "$ROOT/boot/grub"
+cp "$MEDIA/boot/vmlinuz" "$ROOT/boot/vmlinuz"
+cat > "$ROOT/boot/grub/grub.cfg" <<GRUB
+set timeout=5
+set default=0
+search --no-floppy --fs-uuid --set=root $ROOT_UUID
+
+menuentry "AstroOS" {
+	linux /boot/vmlinuz root=PARTUUID=$ROOT_PARTUUID rootwait rw console=tty0 console=ttyS0,115200n8 spec_rstack_overflow=safe-ret quiet splash
+}
+
+menuentry "AstroOS (Debug)" {
+	linux /boot/vmlinuz root=PARTUUID=$ROOT_PARTUUID rootwait rw console=tty0 console=ttyS0,115200n8 spec_rstack_overflow=safe-ret
+}
+
+menuentry "AstroOS (Recovery)" {
+	linux /boot/vmlinuz root=PARTUUID=$ROOT_PARTUUID rootwait rw console=tty0 console=ttyS0,115200n8 spec_rstack_overflow=safe-ret astroos.recovery=1
+}
+GRUB
+
+echo "Installing BIOS and UEFI bootloaders"
+grub-install --target=i386-pc --recheck --boot-directory="$ROOT/boot" "$DEVICE"
+grub-install --target=x86_64-efi --recheck --removable --no-nvram \
+	--efi-directory="$EFI" --boot-directory="$ROOT/boot"
+
+sync
+echo "Installation to $DEVICE completed"

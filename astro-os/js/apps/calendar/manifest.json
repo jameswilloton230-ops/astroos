@@ -1,0 +1,27 @@
+{
+  "id": "com.astroos.calendar",
+  "name": "Calendar",
+  "version": "3.0.2",
+  "author": "DirazCoder",
+  "description": "Create and manage calendar events and schedules.",
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "icon": "calendar",
+  "type": "blank",
+  "defaultSize": [
+    860,
+    580
+  ],
+  "minSize": [
+    600,
+    440
+  ],
+  "resizable": true,
+  "frame": true,
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
+  "system": true,
+  "transparent": true
+}

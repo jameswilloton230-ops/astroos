@@ -1,0 +1,26 @@
+{
+  "id": "com.astroos.search",
+  "name": "Search",
+  "version": "3.0.2",
+  "author": "DirazCoder",
+  "description": "Search AstroOS for apps and available system content.",
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "icon": "search",
+  "type": "blank",
+  "defaultSize": [
+    640,
+    500
+  ],
+  "minSize": [
+    420,
+    300
+  ],
+  "resizable": true,
+  "frame": true,
+  "categories": [
+    "utilities"
+  ],
+  "system": true,
+  "transparent": true
+}

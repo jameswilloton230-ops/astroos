@@ -12,21 +12,20 @@
 /.build-stage
 **/.cache/
 **/.dist/
-/NBOSP/cache/
-/NBOSP/dist/
+/astro-os/cache/
+/astro-os/dist/
 **/ca.crt
 **/ca.trusted
-/NBOSP/data/
-/NBOSP/js/purify.min.js
-/NBOSP/.zcode
-/NBOSP/.kilo
-/NBOSP/.vs
-/NBOSP/graphify-out
-/NBOSP/.graphifyignore
+/astro-os/data/
+/astro-os/js/purify.min.js
+/astro-os/.zcode
+/astro-os/.kilo
+/astro-os/.vs
+/astro-os/graphify-out
+/astro-os/.graphifyignore
 server.log
 .wrangler
 
-# prebuilt app packages — source lives in NBOSP/js/apps/<name>/, build with repackage.js
-/NBOSP/js/apps/*.novaapp
+# prebuilt app packages — source lives in astro-os/js/apps/<name>/, build with repackage.js
+/astro-os/js/apps/*.novaapp
 # Supabase CLI local state
-supabase/.temp/

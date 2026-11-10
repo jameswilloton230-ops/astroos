@@ -1,0 +1,11 @@
+{
+  "id": "com.astroos.service.debug-overlay",
+  "name": "Debug Overlay",
+  "author": "DirazCoder",
+  "description": "Provides the developer-mode diagnostics overlay and its runtime metrics.",
+  "version": "3.0.2",
+  "entry": "service.js",
+  "unrestrictedEntry": "service.js",
+  "system": true,
+  "systemService": true
+}

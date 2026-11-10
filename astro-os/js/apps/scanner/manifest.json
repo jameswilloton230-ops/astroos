@@ -1,0 +1,11 @@
+{
+  "id": "com.astroos.service.scanner",
+  "name": "File Scanner Service",
+  "author": "DirazCoder",
+  "description": "Performs lightweight checks for disguised executables and active content before files are saved or packages installed.",
+  "version": "3.0.2",
+  "entry": "service.js",
+  "unrestrictedEntry": "service.js",
+  "system": true,
+  "systemService": true
+}

@@ -1,0 +1,105 @@
+name: Build AstroOS ISO
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: astro-os/package-lock.json
+
+      - name: Cache NW.js SDK
+        uses: actions/cache@v4
+        with:
+          path: astro-os/.nwjs-cache
+          key: nwjs-sdk-${{ runner.os }}-${{ hashFiles('astro-os/package.json') }}
+          restore-keys: |
+            nwjs-sdk-${{ runner.os }}-
+
+      - name: Install AstroOS dependencies
+        working-directory: AstroOS
+        run: npm ci
+
+      - name: Verify AstroOS OS integration contracts
+        run: >-
+          node --test
+          astro-os/os/package/astroos-kiosk/test-cage-kiosk.mjs
+
+      - name: Build Linux NW.js app
+        working-directory: AstroOS
+        run: node build.mjs linux
+
+      - name: Verify Linux NW.js runtime libraries
+        run: test -f build/linux-x64/lib/libffmpeg.so
+
+      - name: Prepare NW.js app for Wayland kiosk
+        run: |
+          node astro-os/os/package/astroos-kiosk/prepare-kiosk.mjs build/linux-x64
+          mkdir -p astro-os/os/package/astroos-kiosk/source
+          cp -a build/linux-x64/. astro-os/os/package/astroos-kiosk/source/
+
+      - name: Install Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Verify NW.js Node integration under Xvfb
+        run: xvfb-run -a node astro-os/os/package/astroos-kiosk/test-nw-node.mjs build/linux-x64/AstroOS build/linux-x64/package.nw
+
+      - name: Install Buildroot and ISO host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc bison flex file wget cpio unzip rsync \
+            python3 perl patch gzip bzip2 xz-utils libncurses-dev libelf-dev libssl-dev curl \
+            grub-common grub-pc-bin grub-efi-amd64-bin xorriso mtools
+
+      - name: Cache Buildroot source and downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            astro-os/os/.buildroot
+            astro-os/os/.downloads
+          key: astroos-buildroot-source-${{ runner.os }}-${{ hashFiles('astro-os/os/build-iso.sh') }}
+          restore-keys: |
+            astroos-buildroot-source-${{ runner.os }}-
+
+      - name: Cache Buildroot compiled output
+        id: cache-buildroot-output
+        uses: actions/cache@v4
+        with:
+          path: astro-os/os/output
+          key: astroos-buildroot-output-v4-${{ runner.os }}-${{ hashFiles('astro-os/os/build-iso.sh', 'astro-os/os/configs/**', 'astro-os/os/board/**', 'astro-os/os/package/astroos-kiosk/**', 'astro-os/os/package/astroos-install/**', 'astro-os/os/package/astroos-power/**', 'astro-os/os/Config.in', 'astro-os/os/external.*') }}
+          restore-keys: |
+            astroos-buildroot-output-v4-${{ runner.os }}-
+
+      - name: Build bootable AstroOS ISO
+        run: bash astro-os/os/build-iso.sh
+
+      - name: Save Buildroot output after a failed build
+        if: failure() && steps.cache-buildroot-output.outputs.cache-hit != 'true' && hashFiles('astro-os/os/output/.config') != ''
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: astro-os/os/output
+          key: astroos-buildroot-output-v4-${{ runner.os }}-${{ hashFiles('astro-os/os/build-iso.sh', 'astro-os/os/configs/**', 'astro-os/os/board/**', 'astro-os/os/package/astroos-kiosk/**', 'astro-os/os/package/astroos-install/**', 'astro-os/os/package/astroos-power/**', 'astro-os/os/Config.in', 'astro-os/os/external.*') }}
+
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: astroos-live-x86_64
+          path: astro-os/os/output/images/astroos-live.iso
+          if-no-files-found: error
+          retention-days: 14

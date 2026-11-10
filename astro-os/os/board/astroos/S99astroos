@@ -1,0 +1,408 @@
+#!/bin/sh
+
+# --- GL / WebGL bring-up debugging ------------------------------------------
+# Controlled at runtime via /boot/astroos-debug — no rebuild needed.
+#
+# To turn debug ON:   touch /boot/astroos-debug    (or set ASTROOS_GL_DEBUG=1 in
+#                     the kernel cmdline / init env)
+# To turn debug OFF:  rm /boot/astroos-debug
+#
+# What debug mode does:
+#   * cage logs at WLR_DEBUG (CAGE_DEBUG, via patches/cage/0001-*.patch)
+#   * cage starts a wrapper instead of Xwayland that runs it with -verbose 10,
+#     LD_DEBUG=libs and (if installed) strace of failing file/ioctl calls
+#   * Mesa EGL / Chromium GPU-process logging is turned up
+#   * ~30s after boot a dump of the whole graphics state goes to
+#     /home/astroos/astroos-gl-debug.log, the serial console and astroos-kiosk.log
+# Resolve ASTROOS_GL_DEBUG. Priority: env (already set) > kernel cmdline > off.
+if [ -z "$ASTROOS_GL_DEBUG" ]; then
+  _cmdline="$(cat /proc/cmdline 2>/dev/null)"
+  case "$_cmdline" in
+    *ASTROOS_GL_DEBUG=1*) ASTROOS_GL_DEBUG=1 ;;
+    *ASTROOS_GL_DEBUG=0*) ASTROOS_GL_DEBUG=0 ;;
+    *)                  ASTROOS_GL_DEBUG=0 ;;
+  esac
+  unset _cmdline
+fi
+if [ "$ASTROOS_GL_DEBUG" = 1 ]; then
+  export LIBGL_DEBUG=verbose
+fi
+GL_DEBUG_LOG=/home/astroos/astroos-gl-debug.log
+
+# Recovery is entered from the GRUB entry (astroos.recovery=1 on the kernel
+# cmdline) or from a one-shot request file the desktop drops before it
+# restarts the machine (Settings > Recovery, or the boot watchdog after
+# repeated failed starts). The request file is consumed here so it can never
+# trap the machine in recovery twice.
+RECOVERY_REQUEST=/home/astroos/.config/novabyte/recovery-request
+astroos_recovery_requested() {
+  [ -n "$ASTROOS_RECOVERY_DONE" ] && return 1
+  [ -x /usr/sbin/astroos-recovery ] || return 1
+  if [ -f "$RECOVERY_REQUEST" ]; then
+    rm -f "$RECOVERY_REQUEST"
+    return 0
+  fi
+  case "$(cat /proc/cmdline 2>/dev/null)" in
+    *astroos.recovery=1*) return 0 ;;
+  esac
+  return 1
+}
+
+astroos_gl_debug_setup() {
+  gl_debug_env=""
+  chromium_gl_debug=""
+  [ "$ASTROOS_GL_DEBUG" = 1 ] || return 0
+
+  mkdir -p /run/astroos-debug-bin
+  cat > /run/astroos-debug-bin/Xwayland <<'XWRAP'
+#!/bin/sh
+# Installed by S99astroos (ASTROOS_GL_DEBUG). wlroots runs this instead of Xwayland.
+LOG=/home/astroos/xwayland-debug.log
+echo "=== $(date) Xwayland wrapper: $*" >> "$LOG"
+export LD_DEBUG=libs LD_DEBUG_OUTPUT=/home/astroos/xwayland-ld
+# strace is opt-in (ASTROOS_GL_STRACE=1). As the parent of Xwayland it can break
+# cage's startup handshake, which killed the first debug boot.
+if [ "@STRACE@" = 1 ] && [ -x /usr/bin/strace ]; then
+  exec /usr/bin/strace -f -qq -Z -s 256 -o /home/astroos/xwayland.strace \
+    -e trace=file,ioctl,connect,mmap \
+    /usr/bin/Xwayland "$@" -verbose 10 >> "$LOG" 2>&1
+fi
+exec /usr/bin/Xwayland "$@" -verbose 10 >> "$LOG" 2>&1
+XWRAP
+  sed -i "s/@STRACE@/${ASTROOS_GL_STRACE:-0}/" /run/astroos-debug-bin/Xwayland
+  chmod 0755 /run/astroos-debug-bin/Xwayland
+  rm -f /home/astroos/xwayland-debug.log /home/astroos/xwayland-ld.* /home/astroos/xwayland.strace
+  : > /home/astroos/xwayland-debug.log
+  chown astroos:astroos /home/astroos/xwayland-debug.log 2>/dev/null || true
+
+  # WLR_XWAYLAND is honoured by wlroots; the PATH prefix is a fallback in case
+  # it execs plain "Xwayland". Values must not contain quotes or dollar signs.
+  gl_debug_env="CAGE_DEBUG=1 EGL_LOG_LEVEL=debug MESA_DEBUG=1"
+  # The Xwayland wrapper is opt-in (ASTROOS_GL_XWRAP=1). In the last two debug boots
+  # cage's Xwayland died within 10-90ms whenever it was routed through it, so the
+  # default path leaves Xwayland alone and probes a second instance in the dump.
+  if [ "${ASTROOS_GL_XWRAP:-0}" = 1 ]; then
+    gl_debug_env="PATH=/run/astroos-debug-bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin WLR_XWAYLAND=/run/astroos-debug-bin/Xwayland $gl_debug_env"
+  fi
+  chromium_gl_debug="--enable-gpu-service-logging --vmodule=gl_display=3,gl_context=3,gl_surface=3,gl_ozone_egl=3,egl_util=3,gl_utils=3,gpu_init=3,gpu_info_collector=3,gpu_service_impl=3,viz_main_impl=3,angle_platform_impl=3,gpu_feature_info=2"
+}
+
+astroos_gl_find_pid() {
+  for d in /proc/[0-9]*; do
+    if [ "$(cat "$d/comm" 2>/dev/null)" = "$1" ]; then
+      echo "${d#/proc/}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+astroos_gl_sec() {
+  echo
+  echo "===== $* ====="
+}
+
+astroos_gl_proc_report() {
+  name="$1"
+  pid="$(astroos_gl_find_pid "$name")" || {
+    astroos_gl_sec "$name"
+    echo "$name is NOT running"
+    return 0
+  }
+  astroos_gl_sec "$name pid=$pid cmdline"
+  tr '\0' ' ' < "/proc/$pid/cmdline"
+  echo
+  astroos_gl_sec "$name environment (graphics-relevant)"
+  tr '\0' '\n' < "/proc/$pid/environ" \
+    | grep -E '^(LD_|LIBGL|EGL|MESA|WLR_|XDG_|WAYLAND|DISPLAY|PATH|GBM|LIBSEAT|CAGE)' || true
+  astroos_gl_sec "$name mapped libraries (graphics-relevant)"
+  awk '{ print $6 }' "/proc/$pid/maps" | sort -u \
+    | grep -i -E 'EGL|GLX|libGL|gbm|epoxy|dri|glvnd|vulkan|swiftshader|libdrm|wayland|pixman' || true
+  astroos_gl_sec "$name DRM / socket fds"
+  ls -l "/proc/$pid/fd" 2>&1 | grep -E 'dri|socket' | head -20 || true
+}
+
+astroos_gl_debug_dump() {
+  out="$GL_DEBUG_LOG"
+  : > "$out"
+
+  # cage starts Xwayland lazily when Chromium connects; wait up to ~90s for it.
+  i=0
+  while [ "$i" -lt 45 ]; do
+    astroos_gl_find_pid Xwayland >/dev/null && break
+    sleep 2
+    i=$((i + 1))
+  done
+  sleep 8   # let glamor init finish and Chromium's GPU process retry
+
+  # Probe: a second Xwayland on :7 against the running cage, with full verbosity.
+  # Its log should say why glamor falls back, without touching cage's own Xwayland.
+  rm -f /home/astroos/xwayland-probe.log
+  su -s /bin/sh astroos -c 'export HOME=/home/astroos XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 LIBSEAT_BACKEND=seatd EGL_LOG_LEVEL=debug MESA_DEBUG=1; /usr/bin/Xwayland :7 -rootless -verbose 10 -noreset > /home/astroos/xwayland-probe.log 2>&1 & p=$!; sleep 6; kill $p 2>/dev/null; sleep 1; kill -9 $p 2>/dev/null; echo "probe exit handled" >> /home/astroos/xwayland-probe.log'
+  # Same probe under strace (failed calls only) to catch the lookup glamor trips on.
+  rm -f /home/astroos/xwayland-probe.strace
+  if [ -x /usr/bin/strace ]; then
+    su -s /bin/sh astroos -c 'export HOME=/home/astroos XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 LIBSEAT_BACKEND=seatd EGL_LOG_LEVEL=debug MESA_DEBUG=1; /usr/bin/strace -f -qq -Z -s 200 -o /home/astroos/xwayland-probe.strace -e trace=file,ioctl,connect /usr/bin/Xwayland :8 -rootless -verbose 10 -noreset > /home/astroos/xwayland-probe-strace.log 2>&1 & p=$!; sleep 8; kill $p 2>/dev/null; sleep 1; kill -9 $p 2>/dev/null' </dev/null >/dev/null 2>&1
+  fi </dev/null >/dev/null 2>&1
+
+  {
+    echo "===== AstroOS GL DEBUG DUMP $(date) ====="
+    astroos_gl_sec "versions"
+    uname -a
+    /usr/bin/cage -v 2>&1 | head -2
+    /usr/bin/Xwayland -version 2>&1 | head -4
+
+    astroos_gl_sec "DRM nodes"
+    ls -la /dev/dri 2>&1
+    for card in /sys/class/drm/card[0-9]*; do
+      [ -e "$card/device/driver" ] || continue
+      echo "$card -> $(basename "$(readlink -f "$card/device/driver")")"
+    done
+
+    astroos_gl_sec "dmesg (drm/vmwgfx)"
+    dmesg 2>&1 | grep -i -E 'vmwgfx|drm|ttm|svga' | tail -40
+
+    astroos_gl_sec "graphics libraries in /usr/lib"
+    ls -l /usr/lib 2>&1 | grep -i -E 'libEGL|libGL|libgbm|libepoxy|libglapi|libdrm|libwayland|libxshmfence|vulkan'
+    astroos_gl_sec "/usr/lib/dri"
+    ls -la /usr/lib/dri 2>&1
+    astroos_gl_sec "libglvnd EGL vendor files"
+    ls -la /usr/share/glvnd/egl_vendor.d 2>&1
+    for f in /usr/share/glvnd/egl_vendor.d/*; do
+      [ -f "$f" ] && { echo "-- $f"; cat "$f"; }
+    done
+    astroos_gl_sec "Vulkan ICDs"
+    ls -la /usr/share/vulkan/icd.d /etc/vulkan/icd.d 2>&1
+
+    astroos_gl_sec "NW.js runtime layout"
+    ls -la /opt/astroos 2>&1 | head -60
+    ls -la /opt/astroos/lib /opt/astroos/swiftshader 2>&1 | head -60
+
+    astroos_gl_proc_report cage
+    astroos_gl_proc_report Xwayland
+
+    if [ -x /usr/bin/wayland-info ]; then
+      astroos_gl_sec "wayland-info (compositor globals, dmabuf/drm)"
+      su -s /bin/sh astroos -c 'export XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0; wayland-info 2>&1' \
+        | grep -i -E 'interface|dmabuf|wl_drm|format|device' | head -80
+    fi
+    if [ -x /usr/bin/eglinfo ]; then
+      astroos_gl_sec "eglinfo"
+      su -s /bin/sh astroos -c 'export XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 DISPLAY=:0; eglinfo 2>&1' | head -250
+    fi
+    if [ -x /usr/bin/glxinfo ]; then
+      astroos_gl_sec "glxinfo -B (against XWayland :0)"
+      su -s /bin/sh astroos -c 'export XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 DISPLAY=:0; glxinfo -B 2>&1' | head -60
+    fi
+
+    astroos_gl_sec "xwayland-probe.log ($(wc -l < /home/astroos/xwayland-probe.log 2>/dev/null) lines): glamor / egl / gbm / dmabuf lines"
+    grep -n -i -E 'glamor|egl|gbm|dmabuf|drm|dri3|glx|epoxy|wl_drm|modifier|fail|error' /home/astroos/xwayland-probe.log 2>&1 | head -120
+    astroos_gl_sec "xwayland-probe.log: head"
+    head -40 /home/astroos/xwayland-probe.log 2>&1
+    astroos_gl_sec "xwayland-probe-strace.log (stderr of the strace'd probe)"
+    head -40 /home/astroos/xwayland-probe-strace.log 2>&1
+    astroos_gl_sec "xwayland-probe.strace: failed calls touching dri/drm/gbm/egl/mesa/glvnd"
+    grep -i -E 'dri|drm|gbm|egl|mesa|glvnd|render|wayland' /home/astroos/xwayland-probe.strace 2>&1 | tail -60
+    astroos_gl_sec "xwayland-debug.log: glamor / egl / gbm / dmabuf lines"
+    grep -n -i -E 'glamor|egl|gbm|dmabuf|drm|dri3|glx|epoxy|wl_drm|modifier' /home/astroos/xwayland-debug.log 2>&1 | head -120
+    astroos_gl_sec "xwayland-debug.log: tail"
+    tail -40 /home/astroos/xwayland-debug.log 2>&1
+    astroos_gl_sec "xwayland.strace: failed DRM/EGL/GBM/ioctl calls"
+    grep -E 'dri|gbm|EGL|egl|glvnd|vulkan|drm|ioctl' /home/astroos/xwayland.strace 2>&1 | head -150
+    astroos_gl_sec "xwayland LD_DEBUG: GL-related lines"
+    grep -h -i -E 'error|cannot|not found|libEGL|libGL\.so|libgbm|epoxy|glvnd|/dri/' /home/astroos/xwayland-ld.* 2>&1 | head -120
+
+    echo
+    echo "===== END AstroOS GL DEBUG DUMP ====="
+  } >> "$out" 2>&1
+
+  chown astroos:astroos "$out" 2>/dev/null || true
+  cat "$out" > /dev/ttyS0 2>/dev/null || true
+  cat "$out" >> /home/astroos/astroos-kiosk.log 2>/dev/null || true
+}
+
+case "$1" in
+  start)
+    if astroos_recovery_requested; then
+      # Menu runs on VT1 in place of the kiosk. -w keeps it attached to the
+      # VT; start-stop-daemon keeps init from waiting on it.
+      start-stop-daemon --start --background --exec /usr/bin/openvt -- \
+        -f -s -w -c 1 -- /usr/sbin/astroos-recovery
+      exit 0
+    fi
+    app="/opt/astroos/AstroOS"
+    if [ ! -x "$app" ]; then
+      echo "AstroOS kiosk app is missing or not executable: $app" >&2
+      exit 1
+    fi
+    if [ ! -x /usr/bin/cage ]; then
+      echo "AstroOS kiosk: Cage is missing" >&2
+      exit 1
+    fi
+
+    runtime_dir="/run/user/1000"
+    mkdir -p "$runtime_dir"
+    chown astroos:astroos "$runtime_dir"
+    chmod 0700 "$runtime_dir"
+    mkdir -p /home/astroos/.config/novabyte
+    mkdir -p /home/astroos/.config/novabyte/runtime
+    chown astroos:astroos /home/astroos/.config /home/astroos/.config/novabyte /home/astroos/.config/novabyte/runtime
+
+    attempt=0
+    while [ "$attempt" -lt 30 ]; do
+      seatd_ready=false
+      drm_ready=false
+      [ -S /run/seatd.sock ] && seatd_ready=true
+      [ -e /dev/dri/card0 ] && drm_ready=true
+      [ "$seatd_ready" = true ] && [ "$drm_ready" = true ] && break
+      sleep 1
+      attempt=$((attempt + 1))
+    done
+
+    if [ ! -S /run/seatd.sock ]; then
+      echo "AstroOS kiosk: seatd socket missing at /run/seatd.sock" >&2
+      exit 1
+    fi
+    if [ ! -e /dev/dri/card0 ]; then
+      echo "AstroOS kiosk: VMware DRM device missing; available DRM devices:" >&2
+      ls -la /dev/dri >&2 2>/dev/null || echo "  /dev/dri does not exist" >&2
+      exit 1
+    fi
+    if ! grep -q '^render:' /etc/group; then
+      echo "AstroOS kiosk: the DRM render group is missing from /etc/group." >&2
+      exit 1
+    fi
+    vmwgfx_bound=false
+    for card in /sys/class/drm/card[0-9]*; do
+      [ -e "$card/device/driver" ] || continue
+      driver="$(basename "$(readlink -f "$card/device/driver")")"
+      if [ "$driver" = vmwgfx ]; then
+        vmwgfx_bound=true
+        break
+      fi
+    done
+    if [ "$vmwgfx_bound" != true ]; then
+      echo "AstroOS kiosk: VMware vmwgfx kernel driver is not bound to a DRM device." >&2
+      ls -la /sys/class/drm >&2
+      exit 1
+    fi
+    echo "AstroOS kiosk: VMware vmwgfx kernel driver is active."
+    render_device=""
+    for device in /dev/dri/renderD*; do
+      [ -c "$device" ] || continue
+      if su -s /bin/sh astroos -c "test -r '$device' && test -w '$device'"; then
+        render_device="$device"
+        break
+      fi
+    done
+    if [ -z "$render_device" ]; then
+      echo "AstroOS kiosk: astroos cannot access a DRM render node; hardware acceleration would fail." >&2
+      ls -la /dev/dri >&2
+      id astroos >&2
+      exit 1
+    fi
+    if [ ! -x /usr/bin/dbus-run-session ]; then
+      echo "AstroOS kiosk: dbus-run-session is missing" >&2
+      exit 1
+    fi
+    if ! command -v amixer >/dev/null 2>&1; then
+      echo "AstroOS audio: amixer is missing from the image" >&2
+      exit 1
+    fi
+    if grep -Eq '^[[:space:]]*[0-9]+[[:space:]]' /proc/asound/cards 2>/dev/null; then
+      mixer_controls=0
+      for control in Master PCM Front Speaker Headphone Line Surround Center LFE; do
+        if amixer -q -c 0 sset "$control" 80% unmute >/dev/null 2>&1; then
+          mixer_controls=$((mixer_controls + 1))
+        fi
+      done
+      if [ "$mixer_controls" -gt 0 ]; then
+        echo "AstroOS audio: enabled $mixer_controls playback mixer control(s)."
+      else
+        echo "AstroOS audio: no supported playback mixer controls found on card 0." >&2
+        amixer -c 0 scontrols >&2 || true
+      fi
+    else
+      echo "AstroOS audio: no ALSA sound card detected; check the VMware sound device connection" >&2
+    fi
+    app_data_dir="/opt/astroos/package.nw"
+    if [ ! -d "$app_data_dir" ]; then
+      echo "AstroOS kiosk: app data directory is missing: $app_data_dir" >&2
+      exit 1
+    fi
+    if ! chown astroos:astroos /opt/astroos; then
+      echo "AstroOS kiosk: cannot prepare writable runtime state under /opt/astroos" >&2
+      exit 1
+    fi
+    if [ ! -f /opt/astroos/lib/libffmpeg.so ]; then
+      echo "AstroOS kiosk: NW.js runtime library is missing: /opt/astroos/lib/libffmpeg.so" >&2
+      exit 1
+    fi
+    keyboard_layout=us
+    keyboard_layout_file=/home/astroos/.config/novabyte/keyboard-layout
+    if [ -f "$keyboard_layout_file" ]; then
+      keyboard_layout="$(cat "$keyboard_layout_file")"
+    fi
+    case "$keyboard_layout" in
+      us|gb|ca|au|de|fr|be|es|it|pt|br|nl|se|no|dk|fi|pl|tr|ru|ua|jp) ;;
+      *)
+        echo "AstroOS kiosk: invalid saved keyboard layout '$keyboard_layout'; using us" >&2
+        keyboard_layout=us
+        ;;
+    esac
+    astroos_gl_debug_setup
+    cat > /run/astroos-kiosk-session.sh <<SESSION
+#!/bin/sh
+export LD_LIBRARY_PATH=/opt/astroos/lib:/opt/astroos
+[ -x /usr/bin/astroos-vmusr ] && /usr/bin/astroos-vmusr &
+exec /opt/astroos/AstroOS --enable-features=UseOzonePlatform \
+  --ozone-platform=x11 --use-gl=angle --use-angle=gl \
+  --disable-features=Vulkan \
+  $chromium_gl_debug \
+  --ignore-gpu-blocklist --enable-gpu-rasterization --enable-zero-copy \
+  --allow-insecure-localhost --enable-logging=stderr
+SESSION
+    chmod 0755 /run/astroos-kiosk-session.sh
+
+    if [ ! -d /run/astroos-wayland ]; then
+      mkdir -m 2710 /run/astroos-wayland
+    fi
+    if ! chown astroos:astroos-wayland /run/astroos-wayland \
+      || ! chmod 2710 /run/astroos-wayland; then
+      echo "AstroOS kiosk: cannot prepare the private Wayland runtime directory." >&2
+      exit 1
+    fi
+
+    cat > /run/astroos-compositor-session.sh <<'SESSION'
+#!/bin/sh
+umask 0007
+exec /usr/bin/cage -- /run/astroos-kiosk-session.sh
+SESSION
+    chmod 0755 /run/astroos-compositor-session.sh
+
+    start-stop-daemon --start --background --make-pidfile \
+      --pidfile /run/astroos-kiosk.pid --exec /usr/bin/openvt -- \
+      -f -s -w -c 1 -- /bin/sh -c \
+      'n=0; while [ -f /run/astroos-kiosk.pid ] && [ "$n" -lt 5 ]; do su -s /bin/sh astroos -c "export HOME=/home/astroos NODE_ENV=production XDG_RUNTIME_DIR=/run/astroos-wayland LIBSEAT_BACKEND=seatd NODE_BIN_PATH=/opt/astroos/AstroOS ASTROOS_DATA_DIR=/home/astroos/.config/novabyte/runtime LD_LIBRARY_PATH=/opt/astroos/lib:/opt/astroos XCURSOR_THEME=whiteglass XCURSOR_SIZE=32 XCURSOR_PATH=/usr/share/icons:/usr/share/pixmaps WLR_NO_HARDWARE_CURSORS=1 '"$gl_debug_env"' XDG_CURRENT_DESKTOP=cage XDG_SESSION_TYPE=wayland GDK_BACKEND=wayland XKB_DEFAULT_LAYOUT='"$keyboard_layout"'; unset DBUS_SESSION_BUS_ADDRESS; exec /usr/bin/dbus-run-session -- /run/astroos-compositor-session.sh" 2>&1 | tee -a /home/astroos/astroos-kiosk.log /dev/ttyS0 >/dev/null; n=$((n+1)); echo "AstroOS kiosk: session exited, restart $n of 5 allowed" >/dev/ttyS0 2>/dev/null; sleep 2; done'
+
+    if [ "$ASTROOS_GL_DEBUG" = 1 ]; then
+      astroos_gl_debug_dump </dev/null >/dev/null 2>&1 &
+    fi
+    ;;
+  stop)
+    if [ -f /run/astroos-kiosk.pid ]; then
+      kill "$(cat /run/astroos-kiosk.pid)" 2>/dev/null || true
+      rm -f /run/astroos-kiosk.pid
+    fi
+    ;;
+  restart|reload)
+    "$0" stop
+    "$0" start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}" >&2
+    exit 1
+    ;;
+esac
+
+exit 0

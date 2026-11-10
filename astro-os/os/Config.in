@@ -1,0 +1,8 @@
+menu "AstroOS"
+
+source "$BR2_EXTERNAL_ASTROOS_PATH/package/astroos-kiosk/Config.in"
+source "$BR2_EXTERNAL_ASTROOS_PATH/package/astroos-power/Config.in"
+source "$BR2_EXTERNAL_ASTROOS_PATH/package/astroos-install/Config.in"
+source "$BR2_EXTERNAL_ASTROOS_PATH/package/noto-emoji/Config.in"
+
+endmenu

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- X-Content-Type-Options and Referrer-Policy were previously set here via
+       meta http-equiv, but those aren't valid http-equiv values (browsers only
+       recognize a fixed small set, e.g. content-type/refresh/x-ua-compatible),
+       so the tags did nothing. Set these as real response headers on the
+       server instead — that's the only place they actually take effect. -->
+  <!-- Permissions-Policy also isn't a valid http-equiv keyword, so it needs
+       to be set as a real response header (or an iframe "allow" attribute for
+       nested content) rather than here. Once it's on the server, keep this
+       policy: payment=(), usb=(). camera/microphone/geolocation should stay
+       at the browser's default ('self') rather than locked to () — those
+       three are actually enforced by AppPermissionManager plus the per-app
+       permissionrequest gate in app-sandbox.js. An empty allowlist at the
+       document level blocked every same-origin sandboxed app outright,
+       regardless of what the per-app permission system decided, so a
+       correctly-granted device:geolocation/camera/microphone permission
+       could never actually work. payment/usb have no corresponding
+       permission type or IPC handler anywhere in the sandbox, so those two
+       stay fully disabled. -->
+  <title>AstroOS</title>
+  <meta name="description" content="AstroOS — open source browser-based operating system.">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#0f0f0f">
+  <!-- dark-only shell: every surface in style.css is authored against the
+       dark palette above, so advertising light support here would just make
+       browsers guess wrong on native form controls and scrollbars -->
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="/">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.svg">
+  <!-- Open Graph -->
+  <meta property="og:title" content="AstroOS">
+  <meta property="og:description" content="AstroOS — open source browser-based operating system.">
+  <meta property="og:image" content="/assets/og-image.svg">
+  <meta property="og:type" content="website">
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AstroOS">
+  <meta name="twitter:description" content="AstroOS — open source browser-based operating system.">
+  <!-- lucide icons are inline SVG; no external CSS needed -->
+  <link rel="stylesheet" href="style.css">
+  <!-- AstroOS fonts: Material Symbols (icon tiles, window controls, nook icons),
+       Outfit (UI) and JetBrains Mono (mono) -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300..800&family=JetBrains+Mono:wght@400..600&display=swap">
+  <!-- sr-only defined here rather than relying on style.css, since a few
+       inputs below picked up a proper <label> during this pass and this
+       keeps them screen-reader-only without depending on the external
+       sheet already having (or not having) this exact utility class -->
+  <style>
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="safe-mode-banner">⚠ SAFE MODE · Default settings active</div>
+  <!-- Boot Screen -->
+  <div id="boot-screen" role="alert" aria-label="AstroOS is loading">
+    <div class="boot-logo">NOVABYTE</div>
+    <div class="boot-hex-spinner"></div>
+  </div>
+  <!-- Lock Screen -->
+  <div id="lock-screen" role="dialog" aria-modal="true" aria-label="Lock screen">
+    <div class="lock-avatar" aria-hidden="true">U</div>
+    <div class="lock-username" id="lock-username">user</div>
+    <div class="lock-pin-input" id="lock-pin-dots"></div>
+    <div class="lock-status" id="lock-status" aria-live="assertive"></div>
+    <div class="lock-numpad" id="lock-numpad" role="group" aria-label="PIN entry"></div>
+  </div>
+  <!-- Wallpaper -->
+  <div id="wallpaper" aria-hidden="true"></div>
+  <!-- Snap Preview -->
+  <div id="snap-preview" aria-hidden="true"></div>
+  <!-- Snap Compass -->
+<!-- AstroOS: snap compass removed (fork UI) — wm.js guards for its absence -->
+  <!-- Window Container -->
+  <div id="windows" aria-label="Application windows"></div>
+  <!-- Background App Host: holds <webview>s for apps with system:background:live
+       whose window was closed but whose process is being kept alive. These are
+       detached from the window layer entirely (not just visually hidden) so the
+       app never receives focus/paint events meant for a visible window, but the
+       underlying webview process keeps running. See AppSandbox.detachToBackground. -->
+  <div id="background-app-host" aria-hidden="true" style="display:none;"></div>
+  <div id="launcher-root"></div>
+  <div id="system-tray-root">
+<div class="taskbar-tray" role="group" aria-label="System tray">
+      <div class="taskbar-pill-divider"></div>
+      <button type="button" id="tray-volume" name="tray-volume" class="tray-btn" aria-label="Volume">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        </svg>
+      </button>
+      <button type="button" id="tray-wifi" name="tray-wifi" class="tray-btn" aria-label="Network status">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+          <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+          <circle cx="12" cy="20" r="1"></circle>
+        </svg>
+      </button>
+      <button type="button" id="tray-battery" name="tray-battery" class="tray-btn" aria-label="Battery status">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="1" y="6" width="18" height="12" rx="2"></rect>
+          <line x1="23" y1="10" x2="23" y2="14"></line>
+        </svg>
+      </button>
+      <button type="button" id="tray-bell" name="tray-bell" class="tray-btn" aria-label="Notifications">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        </svg>
+        <span class="tray-badge hidden" id="notif-badge">0</span>
+      </button>
+
+      <button type="button" id="tray-user" class="tray-btn" aria-label="User menu" aria-haspopup="true" aria-expanded="false">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="8" r="4"></circle>
+          <path d="M4 20c0-4 4-6 4-6s2-2 4-2 4 2 4 6 4 6-4 6-4-2-4-2-2 2-4 2S4 20 4 20z"></path>
+        </svg>
+      </button>
+      <div class="tray-menu" id="user-menu" role="menu" aria-label="User actions">
+        <div class="tray-menu-item" role="menuitem" tabindex="0" data-action="lock">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <span>Lock</span>
+        </div>
+        <div class="tray-menu-separator"></div>
+        <div class="tray-menu-item" role="menuitem" tabindex="0" data-action="restart">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M20.49 15a9 9 0 0 1-10.62 6"></path>
+          </svg>
+          <span>Restart</span>
+        </div>
+        <div class="tray-menu-item danger" role="menuitem" tabindex="0" data-action="shutdown">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+            <line x1="12" y1="2" x2="12" y2="12"></line>
+          </svg>
+          <span>Shut Down</span>
+        </div>
+      </div>
+      <div class="taskbar-pill-divider"></div>
+      <button type="button" class="tray-clock" id="tray-clock" aria-label="Open calendar" aria-haspopup="dialog">
+        <div class="tray-time" id="tray-time" role="timer" aria-label="Clock"></div>
+        <div class="tray-date" id="tray-date"></div>
+      </button>
+    </div>
+  </div>
+  <!-- Volume Popup -->
+  <div class="volume-popup" id="volume-popup" role="dialog" aria-label="Volume control">
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Volume</div>
+    <label class="sr-only" for="volume-slider">Volume level</label>
+    <input type="range" id="volume-slider" name="volume" class="volume-slider" min="0" max="100" value="80" aria-label="Volume level">
+    <div id="volume-value" style="font-size:11px;color:var(--text-muted);margin-top:6px;text-align:center;">80%</div>
+  </div>
+  <!-- Calendar Popup -->
+  <div class="calendar-popup" id="calendar-popup" role="dialog" aria-label="Calendar">
+    <div class="calendar-popup-header">
+      <button type="button" class="calendar-popup-nav" id="calendar-popup-prev" aria-label="Previous month">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      </button>
+      <div class="calendar-popup-title" id="calendar-popup-title"></div>
+      <button type="button" class="calendar-popup-nav" id="calendar-popup-next" aria-label="Next month">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      </button>
+    </div>
+    <div class="calendar-popup-weekdays" id="calendar-popup-weekdays"></div>
+    <div class="calendar-popup-grid" id="calendar-popup-grid"></div>
+  </div>
+  <!-- Notification Panel -->
+  <div id="notification-panel" role="complementary" aria-label="Notifications">
+    <div class="notif-header">
+      <h3>Notifications</h3>
+      <div class="notif-header-actions">
+        <button type="button" id="notif-mark-read" name="notif-mark-read" class="btn btn-sm" aria-label="Mark all notifications as read">Mark All Read</button>
+        <button type="button" id="notif-mark-all" name="notif-mark-all" class="btn btn-sm" aria-label="Clear all notifications">Clear All</button>
+        <button type="button" id="notif-close" name="notif-close" class="btn btn-sm notif-close" aria-label="Close notifications">×</button>
+      </div>
+    </div>
+    <div class="notif-list" id="notif-list" aria-live="polite"></div>
+  </div>
+  <!-- App Switcher -->
+  <div id="app-switcher" role="dialog" aria-modal="true" aria-label="Application switcher">
+    <div class="app-switcher-list" id="app-switcher-list" role="listbox"></div>
+  </div>
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container" role="log" aria-live="polite"></div>
+  <!-- Liquid Glass SVG filter — the real Apple-style glass distortion -->
+  <svg id="lg-svg-filters" style="display:none" role="presentation" xmlns="http://www.w3.org/2000/svg">
+    <!--
+    glass-distortion: stronger refraction for large standalone glass elements.
+    x/y/width/height expanded well beyond bounds (-10%/-10%/120%/120%) so the
+    displacement map has room to warp without pulling transparent/black pixels
+    from outside the element — that's what causes the edge pixelation.
+  -->
+    <filter id="glass-distortion" x="-10%" y="-10%" width="120%" height="120%" filterUnits="objectBoundingBox">
+      <feTurbulence type="fractalNoise" baseFrequency="0.65 0.75" numOctaves="3" seed="17" result="turbulence"></feTurbulence>
+      <feGaussianBlur in="turbulence" stdDeviation="2" result="softMap"></feGaussianBlur>
+      <feDisplacementMap in="SourceGraphic" in2="softMap" scale="12" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
+    </filter>
+    <!--
+    glass-distortion-soft: subtle edge refraction used on windows & taskbar.
+    Very gentle displacement (scale=6) — enough to see the lens warp without
+    creating visible artifacts. Expanded filter region prevents edge clipping.
+  -->
+    <filter id="glass-distortion-soft" x="-8%" y="-8%" width="116%" height="116%" filterUnits="objectBoundingBox">
+      <feTurbulence type="fractalNoise" baseFrequency="0.65 0.75" numOctaves="3" seed="17" result="turbulence"></feTurbulence>
+      <feGaussianBlur in="turbulence" stdDeviation="2" result="softMap"></feGaussianBlur>
+      <feDisplacementMap in="SourceGraphic" in2="softMap" scale="6" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
+    </filter>
+  </svg>
+  <!-- Performance & Efficiency Optimization Modules -->
+  <!-- Performance Configuration (must load first) -->
+  <!-- NW.js Frame Security (must load early, before app sandbox) -->
+  <script src="/js/platform/security/frame-security.js" defer></script>
+  <!-- Signs same-origin /api/ fetches with the per-launch system secret so
+       OS-UI traffic (launcher, shell, Settings) is trusted by the server's
+       rate limiter instead of competing for the untrusted per-IP budget.
+       Must load before any module that fetches. -->
+  <script src="/js/platform/security/system-fetch.js" defer></script>
+  <!-- App Registry and Permission Manager (must load before app sandbox) -->
+
+  <!-- App Sandbox with Frame Security Validation -->
+  <script src="/js/platform/security/app-sandbox.js" defer></script>
+  <!-- IndexedDB Manager for large app data storage -->
+  <!-- Memory Manager for app unload on inactivity and garbage collection -->
+  <!-- Shared Worker Pool for background tasks and parallel processing -->
+  <!-- GPU Acceleration Module for WebGL, Canvas optimization, and ANGLE support -->
+  <!-- Security: DOMPurify for HTML sanitization -->
+  <script src="/js/purify.min.js" defer></script>
+  <script src="ui-init.js" defer></script>
+
+  <script src="js/core/services/connectivity.js" defer></script>
+  <script src="js/core/services/factory-reset.js" defer></script>
+  <script src="js/core/core/init.js" defer></script>
+  <script src="js/core/utils/base-utils.js" defer></script>
+  <script src="js/core/services/workers.js" defer></script>
+  <script src="js/core/core/kernel.js" defer></script>
+  <script src="js/core/services/fs.js" defer></script>
+
+  <script src="js/platform/core/app-package.js" defer></script>
+  <script src="js/platform/security/trust-store.js" defer></script>
+  <script src="js/platform/security/unrestricted-gate.js" defer></script>
+  <script src="js/platform/core/nova-app-package-store.js" defer></script>
+      <script src="js/platform/core/nova-app-launcher.js" defer></script>
+
+  <script src="/js/platform/core/app-id-aliases.js" defer></script>
+  <script src="/js/platform/core/app-registry.js" defer></script>
+  <!-- AstroOS Registry: OS config store (hives on disk, nova:reg:* IPC,
+       change events). Must load before boot.js so shell lookups can prefer
+       registry values over the OS.settings fallback. -->
+  <script src="/js/platform/core/nova-registry.js" defer></script>
+  <!-- .nvreg text interchange format for the registry (NovaReg export/import,
+       devconsole reg export/import). Depends only on Web APIs. -->
+  <script src="/js/platform/core/nova-reg-file.js" defer></script>
+  <!-- reg CLI (reg.exe flavor) — the dev Console routes `reg ...` lines here. -->
+  <script src="/js/platform/core/nova-reg-cli.js" defer></script>
+  <!-- Settings shim: turns OS.settings into a registry client (the registry
+       is the config source of truth). Boot attaches it right after the
+       registry engine inits; must load before boot.js. -->
+  <script src="/js/platform/core/settings-shim.js" defer></script>
+  <!-- Registry-backed platform prefs (disabled/boot apps, shortcuts,
+       notification channels, overlay position). Replaces the old
+       nova_* localStorage keys; legacy values are adopted once. -->
+  <script src="/js/platform/core/registry-prefs.js" defer></script>
+  <!-- Registry-backed system state (installed apps, permission grants,
+       background alarms, push subscriptions, Store update interval).
+       Replaces the remaining nova_* localStorage keys; legacy values are
+       adopted once. -->
+  <script src="/js/platform/core/registry-system-state.js" defer></script>
+  <!-- Registry-backed boot/recovery machine state (HKNS/system/boot/*).
+       boot() opens the hives before the watchdog consumes these; the legacy
+       nova_* keys stay as the pre-boot handoff channel to init.js and the
+       fail-soft fallback. Must load before boot.js. -->
+  <script src="/js/platform/core/registry-boot-state.js" defer></script>
+  <!-- Per-app config accessor for built-in apps (HKNA/<appId>/...);
+       legacy localStorage keys are adopted once per path. -->
+  <script src="/js/platform/core/app-config.js" defer></script>
+  <script src="/js/platform/security/app-permission-manager.js" defer></script>
+  <script src="/js/platform/security/app-secrets.js" defer></script>
+  <script src="/js/platform/security/root-broker.js" defer></script>
+  <script src="/js/platform/security/app-permissions-bootstrap.js" defer></script>
+  <script src="/js/platform/security/app-scheduler.js" defer></script>
+  <script src="js/core/core/boot.js" defer></script>
+  <script src="js/core/services/system-service-loader.js" defer></script>
+</body>
+</html>

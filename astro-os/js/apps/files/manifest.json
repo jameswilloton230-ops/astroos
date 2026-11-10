@@ -1,0 +1,26 @@
+{
+  "id": "com.astroos.files",
+  "name": "Files",
+  "version": "3.0.2",
+  "author": "DirazCoder",
+  "description": "Browse, organize, and manage files in AstroOS.",
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "icon": "folder-open",
+  "type": "blank",
+  "defaultSize": [
+    780,
+    520
+  ],
+  "minSize": [
+    480,
+    340
+  ],
+  "resizable": true,
+  "frame": true,
+  "categories": [
+    "utilities"
+  ],
+  "system": true,
+  "transparent": true
+}

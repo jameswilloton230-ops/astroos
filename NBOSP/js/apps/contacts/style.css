@@ -1,4 +1,0 @@
-/* Contacts uses the shared OS theme and component layers. */
-@layer apps {
-  .app-window[data-app-id="com.nbosp.contacts"] .window-content { min-width: 0; min-height: 0; overflow: hidden; }
-}

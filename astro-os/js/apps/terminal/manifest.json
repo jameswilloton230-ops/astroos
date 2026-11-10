@@ -1,0 +1,17 @@
+{
+  "id": "com.astroos.terminal",
+  "name": "Terminal",
+  "version": "3.0.2",
+  "description": "Run commands and interact with AstroOS through the terminal.",
+  "author": "DirazCoder",
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "icon": "terminal",
+  "type": "blank",
+  "defaultSize": [700, 460],
+  "minSize": [420, 260],
+  "resizable": true,
+  "frame": true,
+  "categories": ["utilities", "development"],
+  "system": true
+}

@@ -1,0 +1,42 @@
+{
+  "id": "com.astroos.music",
+  "name": "Music",
+  "version": "3.0.2",
+  "author": "DirazCoder",
+  "description": "Play and manage your music in AstroOS.",
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "icon": "music",
+  "type": "blank",
+  "defaultSize": [
+    520,
+    520
+  ],
+  "minSize": [
+    360,
+    380
+  ],
+  "resizable": true,
+  "frame": true,
+  "categories": [
+    "media",
+    "entertainment"
+  ],
+  "system": true,
+  "handles": {
+    "protocols": [],
+    "extensions": [
+      ".mp3",
+      ".mp4",
+      ".m4a",
+      ".ogg",
+      ".wav",
+      ".flac",
+      ".aac",
+      ".opus",
+      ".weba",
+      ".webm"
+    ]
+  },
+  "transparent": true
+}
