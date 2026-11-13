@@ -101,10 +101,19 @@ const auditService = {
         const logs = auditService.query(filters);
         if (format === 'csv') {
             const header = 'id,timestamp,app,severity,message\n';
+            // SECURITY (2026-11-12 audit, finding L2): neutralize spreadsheet
+            // formula execution (=, +, -, @, TAB, CR prefixes) in exported
+            // cells so opening the CSV in Excel/LibreOffice cannot run a
+            // formula smuggled in through log text.
+            const escapeCell = (value) => {
+                const text = value === null || value === undefined ? '' : String(value);
+                const guarded = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+                return /[",\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
+            };
             const rows = logs.map(e => [
                 e.id, new Date(e.timestamp).toISOString(), e.app, e.severity,
                 JSON.stringify(e.message || '')
-            ].join(','));
+            ].map(escapeCell).join(','));
             return header + rows.join('\n');
         }
         return JSON.stringify(logs, null, 2);
@@ -144,6 +153,35 @@ router.post('/admin-mode',
     }),
     async (req, res) => {
         try {
+            // SECURITY (2026-11-12 audit, finding L1): in the multi-user
+            // era the legacy single-user admin flag must not be flippable
+            // by a standard-tier session. While the machine still has no
+            // accounts (true single-user/first-boot), the toggle keeps its
+            // original self-service semantics. Once users.db has rows,
+            // only owner/admin roles may touch it.
+            let accountsExist = false;
+            try {
+                const usersDb = require('./security/users-db');
+                accountsExist = usersDb.hasAccounts();
+            } catch (_) { /* users-db unavailable: keep legacy behaviour */ }
+            if (accountsExist) {
+                const isAdmin = req.user?.role === 'admin';
+                const isRealAccount = !!(req.session && req.session.uid);
+                if (!isAdmin || !isRealAccount) {
+                    auditService.log({
+                        action: 'security_event',
+                        userId: req.user?.id,
+                        resource: 'admin_mode',
+                        success: false,
+                        metadata: { reason: 'role_required', path: req.path }
+                    });
+                    return res.status(403).json({
+                        error: 'Forbidden',
+                        message: 'An administrator account is required to change admin mode on a multi-user machine',
+                        code: 'ADMIN_REQUIRED'
+                    });
+                }
+            }
             const state = adminState.setAdminEnabled(req.body.enabled);
             auditService.log({
                 action: 'config_change',

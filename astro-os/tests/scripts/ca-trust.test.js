@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
+import fs from 'node:fs';
 
 const require = createRequire(import.meta.url);
 const { installCaTrust } = require('../../scripts/ca-trust.js');
@@ -13,9 +14,8 @@ afterEach(() => {
 
 describe('scripts/ca-trust.js — installCaTrust', () => {
   it('degrades gracefully to false on linux when no trust tooling exists', () => {
-    // The sandbox has no certutil (NSS) and no sudo-able system store update;
-    // the function must report false instead of throwing.
-    expect(process.platform).toBe('linux');
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const result = installCaTrust('/nonexistent/ca.crt');

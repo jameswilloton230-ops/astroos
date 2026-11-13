@@ -916,6 +916,17 @@ function showUntrustedAppDialog(appData, { onLaunchAnyway } = {}) {
           // ── Blob URL tracking for memory cleanup ──
           let blobUrl = null;
 
+          // SECURITY (2026-11-12 audit, finding M7): this legacy fallback
+          // used to create <webview>s with NO sandbox attribute for any
+          // installed package — untrusted .novaapp content running
+          // same-origin with the Node-context host page. Only a genuine
+          // System signer triple keeps host-tier here (the same rule the
+          // modern AppSandbox applies through the UnrestrictedGate);
+          // everything else gets the default restrictive sandbox tokens.
+          const legacyHostTier = appData.verified === true &&
+            appData.signer === 'Astro System' &&
+            appData.manifest?.system === true;
+
           try {
             let html = decodeURIComponent(escape(atob(entryB64)));
             let pkgData = null;
@@ -1105,6 +1116,9 @@ function showUntrustedAppDialog(appData, { onLaunchAnyway } = {}) {
                   style: 'width:100%;height:100%;border:none;display:block;'
                 });
 
+                if (!legacyHostTier) {
+                  webview.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-popups');
+                }
                 if (webview.tagName !== 'WEBVIEW' && typeof FrameSecurity !== 'undefined' && typeof FrameSecurity.securifyFrame === 'function') {
                   FrameSecurity.securifyFrame(webview);
                 }
@@ -1188,6 +1202,9 @@ function showUntrustedAppDialog(appData, { onLaunchAnyway } = {}) {
               style: 'width:100%;height:100%;border:none;display:block;'
             });
 
+            if (!legacyHostTier) {
+              webview.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-popups');
+            }
             if (webview.tagName !== 'WEBVIEW' && typeof FrameSecurity !== 'undefined' && typeof FrameSecurity.securifyFrame === 'function') {
               FrameSecurity.securifyFrame(webview);
             }

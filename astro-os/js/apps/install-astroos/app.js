@@ -102,24 +102,14 @@
     if (cleanupError) throw cleanupError;
   }
 
-  function shouldRegisterInstaller() {
-    if (typeof process === 'undefined' || process.platform !== 'linux') return true;
-    try {
-      return !/(?:^|\s)root=/.test(require('fs').readFileSync('/proc/cmdline', 'utf8'));
-    } catch (error) {
-      console.error('[Install AstroOS] Could not determine whether this is an installed system:', error);
-      return true;
-    }
-  }
-
-  if (shouldRegisterInstaller()) registerApp({
+  registerApp({
     id: APP_ID,
     name: 'Install AstroOS',
     icon: 'hard-drive',
     version: '3.0.2',
     description: 'Install AstroOS to a selected disk.',
     defaultSize: [680, 520],
-    minSize: [520, 420],
+    minSize: [400, 320],
     init(content) {
       content.replaceChildren();
       if (typeof process === 'undefined' || process.platform !== 'linux') {
@@ -130,9 +120,10 @@
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        gap: '18px',
-        padding: '28px',
+        gap: 'clamp(8px, 2vh, 18px)',
+        padding: 'clamp(12px, 4vw, 28px)',
         height: '100%',
+        minWidth: '0',
         color: 'var(--text-primary)',
         fontFamily: 'var(--font-ui, sans-serif)'
       });
@@ -161,15 +152,21 @@
       let running = false;
       let installationFailed = false;
       const stages = ['Choose a disk', 'Review and confirm', 'Installing', 'Complete'];
-      const body = createEl('div', { style: 'display:flex;flex:1;min-height:0;flex-direction:column;gap:16px' });
-      const footer = createEl('div', { style: 'display:flex;justify-content:space-between;gap:12px;margin-top:auto' });
+      const body = createEl('div', {
+        className: 'astroos-installer-body',
+        style: 'display:flex;flex:1;min-height:0;min-width:0;flex-direction:column;gap:12px;overflow-y:auto;overscroll-behavior:contain'
+      });
+      const footer = createEl('div', {
+        className: 'astroos-installer-footer',
+        style: 'display:flex;flex:0 0 auto;flex-wrap:wrap;align-items:stretch;gap:12px;margin-top:auto'
+      });
       const backButton = createEl('button', {
         textContent: 'Back',
-        style: 'padding:10px 16px;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--text-primary);cursor:pointer'
+        style: 'box-sizing:border-box;flex:1 1 150px;min-width:0;padding:10px 16px;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--text-primary);white-space:normal;line-height:1.35;cursor:pointer'
       });
       const nextButton = createEl('button', {
         textContent: 'Continue',
-        style: 'padding:10px 18px;border:0;border-radius:7px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer'
+        style: 'box-sizing:border-box;flex:1 1 150px;min-width:0;padding:10px 18px;border:0;border-radius:7px;background:var(--accent);color:#fff;font-weight:600;white-space:normal;line-height:1.35;cursor:pointer'
       });
       const refreshDisks = () => {
         try {
@@ -214,31 +211,26 @@
             textContent: 'Choose the virtual hard disk you added for AstroOS. The live ISO is not a destination disk.',
             style: 'line-height:1.55;color:var(--text-secondary)'
           });
-          const diskChoices = createEl('div', {
-            role: 'group',
+          const diskSelect = createEl('select', {
             'aria-label': 'Installation disk',
-            style: 'display:flex;flex-direction:column;gap:8px;max-height:150px;overflow:auto'
+            style: 'box-sizing:border-box;width:100%;min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:7px;background:var(--bg-secondary);color:var(--text-primary);font:inherit'
           });
-          if (!disks.length) {
-            diskChoices.appendChild(createEl('div', {
-              textContent: 'No supported disks found.',
-              style: 'padding:12px;border:1px solid var(--border);border-radius:7px;color:var(--text-secondary)'
-            }));
-          }
+          const placeholder = document.createElement('option');
+          placeholder.value = '';
+          placeholder.textContent = disks.length ? 'Select an installation disk…' : 'No supported disks found.';
+          placeholder.disabled = disks.length > 0;
+          diskSelect.appendChild(placeholder);
           for (const disk of disks) {
-            const selected = disk.device === selectedDevice;
-            const choice = createEl('button', {
-              type: 'button',
-              'aria-pressed': String(selected),
-              textContent: `${disk.device}${disk.model ? ` — ${disk.model}` : ''} (${formatSize(disk.size)})`,
-              style: `padding:12px;text-align:left;color:var(--text-primary);background:${selected ? 'var(--accent-muted)' : 'var(--bg-secondary)'};border:1px solid ${selected ? 'var(--accent)' : 'var(--border)'};border-radius:7px;font:inherit;cursor:pointer`
-            });
-            choice.addEventListener('click', () => {
-              selectedDevice = disk.device;
-              renderStep();
-            });
-            diskChoices.appendChild(choice);
+            const option = document.createElement('option');
+            option.value = disk.device;
+            option.textContent = `${disk.device}${disk.model ? ` — ${disk.model}` : ''} (${formatSize(disk.size)})`;
+            diskSelect.appendChild(option);
           }
+          diskSelect.value = selectedDevice;
+          diskSelect.addEventListener('change', () => {
+            selectedDevice = diskSelect.value;
+            nextButton.disabled = !selectedDisk();
+          });
           const refreshButton = createEl('button', {
             textContent: 'Refresh disk list',
             style: 'align-self:flex-start;padding:8px 12px;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--text-primary);cursor:pointer'
@@ -252,7 +244,7 @@
             textContent: 'For safety, use a separate, disposable VMware virtual disk. Never select a disk containing files you want to keep.',
             style: 'padding:14px;border:1px solid var(--text-warning,#d29922);border-radius:8px;color:var(--text-warning,#d29922);line-height:1.5'
           });
-          body.append(explanation, diskChoices, refreshButton, safety);
+          body.append(explanation, diskSelect, refreshButton, safety);
           nextButton.textContent = 'Review disk';
         } else if (step === 1) {
           const disk = selectedDisk();

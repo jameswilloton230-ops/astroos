@@ -104,6 +104,39 @@ async function getIndexHtml() {
 }
 const _indexHtmlWatcher = fs.watch(path.join(__dirname, '..', '..', 'index.html'), () => { _indexHtmlRaw = null; });
 
+// 2.5b. System signing anchor override (release-keys rotation).
+// ASTROOS_SYSTEM_SIGNING_PUBLIC_JWK holds the operator's OFFLINE release key's
+// PUBLIC JWK (never the private half). When set and well-formed, it is
+// injected into the page as <meta name="nova-system-signing-jwk"> and
+// trust-store.js swaps the default AOSP-style test-key anchor for it
+// (TrustStore.systemSignatureTier() → 'release-keys'). Unset/invalid →
+// the committed test key stays the anchor (test-keys), which is what every
+// fresh clone and fork runs on. See astro-os/keys/README.md.
+let _systemKeyMetaHtml = '';
+try {
+    const rawJwk = process.env.ASTROOS_SYSTEM_SIGNING_PUBLIC_JWK;
+    if (typeof rawJwk === 'string' && rawJwk.trim().length > 0) {
+        const jwk = JSON.parse(rawJwk);
+        if (
+            jwk && typeof jwk === 'object' &&
+            jwk.kty === 'OKP' && jwk.crv === 'Ed25519' &&
+            typeof jwk.x === 'string' && jwk.x
+        ) {
+            // Carry the whole public JWK (the browser's HTML parser decodes
+            // the attribute entities back to valid JSON, which trust-store.js
+            // JSON.parses — a bare x string would not parse back into a JWK).
+            const safe = JSON.stringify({ kty: 'OKP', crv: 'Ed25519', x: jwk.x })
+                .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            _systemKeyMetaHtml = `<meta name="nova-system-signing-jwk" content="${safe}">`;
+            console.info('[OS] System signing anchor: rotated to the ASTROOS_SYSTEM_SIGNING_PUBLIC_JWK release key (release-keys)');
+        } else {
+            console.warn('[OS] ASTROOS_SYSTEM_SIGNING_PUBLIC_JWK is set but is not an Ed25519 OKP JWK — keeping the default test-key anchor');
+        }
+    }
+} catch (err) {
+    console.warn('[OS] ASTROOS_SYSTEM_SIGNING_PUBLIC_JWK could not be parsed — keeping the default test-key anchor:', err.message);
+}
+
 // GET / (MUST come before static middleware!)
 app.get('/', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -114,7 +147,7 @@ app.get('/', async (req, res) => {
 
     // Inject CSRF token meta tag — the only runtime injection needed
     const csrfToken = req.session?.csrfToken || res.locals.csrfToken || '';
-    html = html.replace('</head>', `<meta name="csrf-token" content="${csrfToken}"></head>`);
+    html = html.replace('</head>', `<meta name="csrf-token" content="${csrfToken}">${_systemKeyMetaHtml}</head>`);
 
     res.send(html);
 });
@@ -331,8 +364,50 @@ function _pruneAppServeRegistry() {
 const _appServeSweepTimer = setInterval(_pruneAppServeRegistry, _APP_SERVE_TTL);
 _appServeSweepTimer.unref();
 
+// SECURITY (2026-11-12 audit, finding M2): the app-serve mutation routes
+// (register/heartbeat/unregister) are CSRF-exempt by design — <webview>
+// subresource loads and the host's own registration fetch cannot always
+// carry a CSRF token. That exemption previously left them with NO request-
+// origin enforcement at all: any web page in the user's browser could POST
+// a file map and have it served at the OS's own origin under the relaxed
+// app CSP. Enforce same-origin Origin/Referer on these verbs — the trusted
+// host page (and anything in its origin) always sends a matching Origin
+// header on POST/DELETE; sandboxed guests cannot reach these routes with
+// the OS session cookie anyway (opaque origin + SameSite=lax), and a
+// missing/foreign Origin is now rejected outright.
+function _isSameOriginAppServeRequest(req) {
+  const origin = req.headers.origin;
+  if (typeof origin === 'string' && origin.length > 0) {
+    const host = req.headers.host || `127.0.0.1:${process.env.PORT || 3003}`;
+    const originHost = (() => { try { return new URL(origin).host; } catch (_) { return null; } })();
+    if (originHost === null) return false;
+    if (originHost !== host) return false;
+    return /^https?:$/.test((() => { try { return new URL(origin).protocol; } catch (_) { return ''; } })());
+  }
+  // No Origin header: fall back to Referer's authority. The host page's
+  // own fetches always carry Origin on POST/DELETE; absence of both means
+  // a non-browser or hostile client — reject.
+  const referer = req.headers.referer;
+  if (typeof referer === 'string' && referer.length > 0) {
+    const host = req.headers.host || `127.0.0.1:${process.env.PORT || 3003}`;
+    try {
+      const ref = new URL(referer);
+      if (ref.host !== host) return false;
+      return /^https?:$/.test(ref.protocol);
+    } catch (_) { return false; }
+  }
+  return false;
+}
+
+function requireSameOrigin(req, res, next) {
+  if (!_isSameOriginAppServeRequest(req)) {
+    return res.status(403).json({ error: 'Cross-origin app-serve request rejected' });
+  }
+  next();
+}
+
 // Register app files for serving (called by app-sandbox.js loadAppContent)
-app.post('/api/apps/serve/register', (req, res) => {
+app.post('/api/apps/serve/register', requireSameOrigin, (req, res) => {
     const { sandboxId, files, allowExternalFrames, appId } = req.body || {};
     if (!sandboxId || typeof sandboxId !== 'string' || !files || typeof files !== 'object') {
         return res.status(400).json({ error: 'sandboxId (string) and files (object) are required' });
@@ -405,7 +480,7 @@ app.post('/api/apps/serve/register', (req, res) => {
 // the sandbox exists). Keeps the registry entry past the idle TTL for apps that
 // load their bundle once and then go quiet — see the registry comment above for
 // why the TTL alone breaks long-running redirect flows.
-app.post('/api/apps/serve/heartbeat', (req, res) => {
+app.post('/api/apps/serve/heartbeat', requireSameOrigin, (req, res) => {
     const { sandboxId } = req.body || {};
     if (typeof sandboxId !== 'string' || !sandboxId) {
         return res.status(400).json({ error: 'sandboxId (string) is required' });
@@ -419,7 +494,7 @@ app.post('/api/apps/serve/heartbeat', (req, res) => {
 });
 
 // Unregister (called on sandbox destroy)
-app.delete('/api/apps/serve/unregister/:sandboxId', (req, res) => {
+app.delete('/api/apps/serve/unregister/:sandboxId', requireSameOrigin, (req, res) => {
     const key = req.params.sandboxId;
     const entry = _appServeRegistry.get(key);
     _appServeRegistry.delete(key);

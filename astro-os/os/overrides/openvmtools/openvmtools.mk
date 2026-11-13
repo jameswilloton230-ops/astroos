@@ -20,17 +20,17 @@ OPENVMTOOLS_IGNORE_CVES += CVE-2021-31693
 # configure.ac is patched
 OPENVMTOOLS_AUTORECONF = YES
 OPENVMTOOLS_CONF_OPTS = --with-dnet \
-	--without-icu --without-kernel-modules \
-	--disable-deploypkg --without-xerces \
-	--disable-vgauth --disable-containerinfo
+        --without-icu --without-kernel-modules \
+        --disable-deploypkg --without-xerces \
+        --disable-vgauth --disable-containerinfo
 OPENVMTOOLS_CONF_ENV += \
-	CUSTOM_DNET_CPPFLAGS=" " \
-	LIBS=$(TARGET_NLS_LIBS)
+        CUSTOM_DNET_CPPFLAGS=" " \
+        LIBS=$(TARGET_NLS_LIBS)
 OPENVMTOOLS_DEPENDENCIES = \
-	host-nfs-utils \
-	libglib2 \
-	libdnet \
-	$(TARGET_NLS_DEPENDENCIES)
+        host-nfs-utils \
+        libglib2 \
+        libdnet \
+        $(TARGET_NLS_DEPENDENCIES)
 
 ifeq ($(BR2_PACKAGE_LIBTIRPC),y)
 OPENVMTOOLS_CONF_OPTS += --with-tirpc
@@ -67,11 +67,11 @@ endif
 # uses more than one X screen.
 ifeq ($(BR2_PACKAGE_OPENVMTOOLS_DESKTOP),y)
 OPENVMTOOLS_CONF_OPTS += --with-x --with-gtk3 --without-gtk4 \
-	--with-gtkmm3 --disable-multimon
+        --with-gtkmm3 --disable-multimon
 OPENVMTOOLS_DEPENDENCIES += gtkmm3 libgtk3 xlib_libX11 xlib_libXext \
-	xlib_libXi xlib_libXrandr xlib_libXrender xlib_libXtst
+        xlib_libXi xlib_libXrandr xlib_libXrender xlib_libXtst
 else
-OPENVMTOOLS_CONF_OPTS += --without-x
+OPENVMTOOLS_CONF_OPTS += --without-x --without-gtk2 --without-gtkmm
 endif
 
 ifeq ($(BR2_PACKAGE_OPENVMTOOLS_PAM),y)
@@ -92,23 +92,23 @@ endif
 # defined in lib/misc/hostinfoPosix.c
 # /sbin/shutdown needed for Guest OS restart/shutdown from hypervisor
 define OPENVMTOOLS_POST_INSTALL_TARGET_THINGIES
-	ln -fs os-release $(TARGET_DIR)/etc/lfs-release
-	if [ ! -e $(TARGET_DIR)/sbin/shutdown ]; then \
-		$(INSTALL) -D -m 755 package/openvmtools/shutdown \
-			$(TARGET_DIR)/sbin/shutdown; \
-	fi
+        ln -fs os-release $(TARGET_DIR)/etc/lfs-release
+        if [ ! -e $(TARGET_DIR)/sbin/shutdown ]; then \
+                $(INSTALL) -D -m 755 package/openvmtools/shutdown \
+                        $(TARGET_DIR)/sbin/shutdown; \
+        fi
 endef
 
 OPENVMTOOLS_POST_INSTALL_TARGET_HOOKS += OPENVMTOOLS_POST_INSTALL_TARGET_THINGIES
 
 define OPENVMTOOLS_INSTALL_INIT_SYSV
-	$(INSTALL) -D -m 755 package/openvmtools/S10vmtoolsd \
-		$(TARGET_DIR)/etc/init.d/S10vmtoolsd
+        $(INSTALL) -D -m 755 package/openvmtools/S10vmtoolsd \
+                $(TARGET_DIR)/etc/init.d/S10vmtoolsd
 endef
 
 define OPENVMTOOLS_INSTALL_INIT_SYSTEMD
-	$(INSTALL) -D -m 644 package/openvmtools/vmtoolsd.service \
-		$(TARGET_DIR)/usr/lib/systemd/system/vmtoolsd.service
+        $(INSTALL) -D -m 644 package/openvmtools/vmtoolsd.service \
+                $(TARGET_DIR)/usr/lib/systemd/system/vmtoolsd.service
 endef
 
 $(eval $(autotools-package))

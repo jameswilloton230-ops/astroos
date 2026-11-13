@@ -1,0 +1,49 @@
+/* com.astroos.setup — sandboxed fallback document styles.
+   The wizard itself renders in the trusted host and carries its own
+   inline styles (see app.js); this sheet only styles the fallback page
+   that shows when the trusted launch path is unavailable. */
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #0f1115;
+  color: #e6e6e6;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.setup-fallback {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.setup-fallback-card {
+  max-width: 460px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 32px 28px;
+}
+
+.setup-fallback-card h1 {
+  margin: 0 0 10px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #93c5fd;
+}
+
+.setup-fallback-card p {
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #b8bcc4;
+}
+
+.setup-fallback-hint {
+  color: #8a8f98;
+  font-size: 12px;
+}

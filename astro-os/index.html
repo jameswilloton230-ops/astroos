@@ -162,7 +162,39 @@
         <div class="tray-time" id="tray-time" role="timer" aria-label="Clock"></div>
         <div class="tray-date" id="tray-date"></div>
       </button>
+      <button type="button" id="tray-power" name="tray-power" class="tray-btn" aria-label="Power options" aria-haspopup="menu" aria-expanded="false" popovertarget="power-menu">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 2v10"></path>
+          <path d="M18.4 6.6a9 9 0 1 1-12.8 0"></path>
+        </svg>
+      </button>
     </div>
+  </div>
+  <!-- Power Menu -->
+  <div class="tray-menu" id="power-menu" popover="auto" role="menu" aria-label="Power options">
+    <button type="button" class="tray-menu-item" role="menuitem" data-power-action="logoff">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <path d="M16 17l5-5-5-5"></path>
+        <path d="M21 12H9"></path>
+      </svg>
+      Log off
+    </button>
+    <div class="tray-menu-separator" role="separator" data-power-separator></div>
+    <button type="button" class="tray-menu-item" role="menuitem" data-power-action="restart">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12a9 9 0 1 1-3-6.7"></path>
+        <path d="M21 3v6h-6"></path>
+      </svg>
+      Restart
+    </button>
+    <button type="button" class="tray-menu-item danger" role="menuitem" data-power-action="poweroff">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 2v10"></path>
+        <path d="M18.4 6.6a9 9 0 1 1-12.8 0"></path>
+      </svg>
+      Power off
+    </button>
   </div>
   <!-- Volume Popup -->
   <div class="volume-popup" id="volume-popup" role="dialog" aria-label="Volume control">
@@ -231,6 +263,10 @@
   <!-- Performance Configuration (must load first) -->
   <!-- NW.js Frame Security (must load early, before app sandbox) -->
   <script src="/js/platform/security/frame-security.js" defer></script>
+  <!-- Per-user scoping must load before every storage consumer (sandbox,
+       registry, FS, AppDirs) so owner stamping is available from the first
+       byte of boot. -->
+  <script src="/js/platform/core/user-scope.js" defer></script>
   <!-- Signs same-origin /api/ fetches with the per-launch system secret so
        OS-UI traffic (launcher, shell, Settings) is trusted by the server's
        rate limiter instead of competing for the untrusted per-IP budget.
@@ -251,6 +287,10 @@
   <script src="js/core/services/connectivity.js" defer></script>
   <script src="js/core/services/factory-reset.js" defer></script>
   <script src="js/core/core/init.js" defer></script>
+  <!-- The 3.0.2 → accounts migration must run inside boot() BEFORE the
+       subsystems open the storage schemas — it needs NovaUserScope (loaded
+       first) and NovaRegistry (opened at boot step 0). -->
+  <script src="js/core/services/multiuser-migration.js" defer></script>
   <script src="js/core/utils/base-utils.js" defer></script>
   <script src="js/core/services/workers.js" defer></script>
   <script src="js/core/core/kernel.js" defer></script>

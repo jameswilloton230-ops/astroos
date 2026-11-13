@@ -1,0 +1,20 @@
+{
+  "id": "com.astroos.users",
+  "name": "Users",
+  "author": "jameswilloton230-ops",
+  "description": "Admin console for accounts: create, edit, reset, disable, delete, machine policies and the per-user audit feed.",
+  "version": "3.0.2",
+  "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiIgd2lkdGg9Ijk0IiBoZWlnaHQ9Ijk0Ij48IS0tIHNvbGlkIHN0YWNrIG9mIHBlb3BsZSAvIGFkbWluIHNoaWVsZCAtLT4KICA8IS0tIGJhY2sgcGVyc29uIC0tPgogIDxjaXJjbGUgY3g9IjMyIiBjeT0iMzgiIHI9IjEwIiBmaWxsPSIjOTNjNWZkIi8+CiAgPHBhdGggZD0iTTIgNzQgdi0xIGMwLTkgMTMtMTQgMzAtMTQgczMwIDUgMzAgMTR2MSB6IiBmaWxsPSIjOTNjNWZkIi8+CiAgPCEtLSBmcm9udCBwZXJzb24sIGFkbWluLWNoaXJwZWQgLS0+CiAgPGNpcmNsZSBjeD0iNjQiIGN5PSIzMiIgcj0iMTIiIGZpbGw9IiMyNTYzZWIiLz4KICA8cGF0aCBkPSJNNDAgNzQgdi0yIGMwLTExIDEwLTIgMjQtMTIgMjQgMTJ2MSB6IiBmaWxsPSIjMjU2M2ViIi8+CiAgPCEtLSBzaGllbGQgLS0+CiAgPHBhdGggZD0iTTY4IDQ2IDIwIDcyIGw2IDcgMjQtMTAgMTAgOSA0LTcgMjQgMjQtMTQgMy0yMCA5LTItNCA1IDcgNC01LTkgMSA0IDctNS0zIDcgMTAgMy0yMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmRlNjhhIiBzdHJva2Utd2lkdGg9IjIuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgPGNpcmNsZSBjeD0iNzAiIGN5PSI0NCIgcj0iNSIgZmlsbD0iI2ZkZTY4YSIvPgo8L3N2Zz4=",
+  "category": "admin",
+  "categories": ["admin", "system"],
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "type": "blank",
+  "defaultSize": [880, 640],
+  "minSize": [560, 420],
+  "resizable": true,
+  "frame": true,
+  "permissions": [],
+  "system": true,
+  "transparent": true
+}

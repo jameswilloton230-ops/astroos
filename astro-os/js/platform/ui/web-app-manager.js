@@ -251,8 +251,12 @@ function normalizeStoredApp(raw) {
   const id = typeof raw.id === 'string' ? raw.id : null;
   const name = typeof raw.name === 'string' ? raw.name : null;
   const url = typeof raw.url === 'string' ? raw.url : null;
-  const icon = typeof raw.icon === 'string' ? raw.icon : null;
-  if (!id || !name || !url || !icon) return null;
+  // Re-validate the stored icon on every restore — a corrupted or
+  // tampered record must not smuggle markup into the shell renderers.
+  const icon = typeof raw.icon === 'string'
+    ? sanitizeIcon(raw.icon, { maxLength: LIMITS.MAX_ICON_LENGTH })
+    : null;
+  if (!id || !name || !url) return null;
   if (!isValidUrl(url)) return null;
 
   const launchCount = Number.isFinite(raw.launchCount)
@@ -272,6 +276,12 @@ function normalizeStoredApp(raw) {
 // Storage I/O
 // ============================================================================
 
+function isMultiUser() {
+  return typeof RegistrySystemState !== 'undefined' &&
+    typeof RegistrySystemState.multiUserOn === 'function' &&
+    RegistrySystemState.multiUserOn();
+}
+
 /**
  * Read and migrate the stored payload.
  *
@@ -279,6 +289,19 @@ function normalizeStoredApp(raw) {
  */
 function readFromStorage() {
   if (!state.storageAvailable) {
+    return { version: SCHEMA_VERSION, apps: [] };
+  }
+
+  // Multi-user: the list is per account (HKNU, via RegistrySystemState).
+  // Never fall back to the machine-wide localStorage copy, or one account's
+  // shortcuts would show up for everyone.
+  if (isMultiUser()) {
+    try {
+      const payload = RegistrySystemState.webApps();
+      if (payload) return migrateStoredData(payload);
+    } catch (error) {
+      log.warn('registry read failed; starting with an empty web app list:', error);
+    }
     return { version: SCHEMA_VERSION, apps: [] };
   }
 
@@ -337,6 +360,17 @@ function writeToStorage(payload) {
     serialized = JSON.stringify(payload);
   } catch (error) {
     throw new StorageError('Failed to serialize web apps', { cause: error });
+  }
+
+  // Multi-user: write to the account's own hive only; the localStorage
+  // fallback below is machine-wide and would leak to other accounts.
+  if (isMultiUser()) {
+    try {
+      if (!RegistrySystemState.setWebApps(payload)) log.warn('registry write failed; web apps not persisted');
+    } catch (error) {
+      log.warn('registry write failed; web apps not persisted:', error);
+    }
+    return;
   }
 
   // Registry-first (HKNS/apps/webapps). The localStorage write below stays
@@ -488,6 +522,34 @@ function isValidUrl(urlString) {
  * @returns {{ name: string, url: string, icon: string }}
  * @throws {ValidationError}
  */
+/**
+ * Icon gate (2026-11-12 audit, finding M5): web-app icons are rendered in
+ * the privileged shell via `svgIcon()` raw branches (taskbar, desktop,
+ * dock), so a record must only carry a render-safe value:
+ *   - a data: URI,
+ *   - an http(s) URL,
+ *   - an emoji-ish string (rendered as escaped text by svgIcon),
+ *   - a plain icon-set key (letters/digits/hyphens/dots).
+ * Anything else (markup, attribute breakouts, javascript: schemes) is
+ * rejected and the app falls back to the default icon.
+ */
+function isRenderSafeIcon(value) {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  if (/^data:image\//i.test(value)) return true;
+  if (/^https?:\/\//i.test(value)) return true;
+  // Emoji-ish content (svgIcon renders it as escaped text content).
+  if (/[^\u0000-\u007F]/.test(value) && value.length <= 12) return true;
+  // Icon-set keys: plain ASCII identifier characters only.
+  if (/^[A-Za-z][A-Za-z0-9._-]{0,63}$/.test(value)) return true;
+  return false;
+}
+
+function sanitizeIcon(value, { maxLength }) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().slice(0, maxLength);
+  return isRenderSafeIcon(trimmed) ? trimmed : null;
+}
+
 function validateAppInput(input) {
   if (!input || typeof input !== 'object') {
     throw new ValidationError('App input must be an object', { field: 'app' });
@@ -507,7 +569,7 @@ function validateAppInput(input) {
   }
 
   const icon = input.icon
-    ? sanitizeString(input.icon, { maxLength: LIMITS.MAX_ICON_LENGTH, label: 'icon' })
+    ? sanitizeIcon(input.icon, { maxLength: LIMITS.MAX_ICON_LENGTH })
     : null;
 
   return { name, url, icon };
@@ -586,6 +648,23 @@ function initialize() {
 
   state.initialized = true;
   log.info(`Loaded ${state.apps.length} web apps`);
+}
+
+/**
+ * Account switch: replace the in-memory list with the mounted account's.
+ * Initialisation runs before anyone signs in, so without this a second user
+ * would see the previous user's shortcuts. The SessionManager flushes the
+ * departing account's pending save (flush) before it swaps the hives.
+ */
+function reloadForUser() {
+  if (!state.initialized) return; // initialize() will read the right account
+  try {
+    state.apps = readFromStorage().apps;
+  } catch (error) {
+    log.error('Failed to reload web apps for the new account:', error);
+    state.apps = [];
+  }
+  log.info(`Reloaded ${state.apps.length} web apps for the mounted account`);
 }
 
 /**
@@ -875,6 +954,7 @@ const WebAppManager = Object.freeze({
   isValidUrl,
   // New additive APIs:
   flush,
+  reloadForUser,
   destroy,
   setLogLevel,
 });
@@ -897,6 +977,7 @@ export {
   getStats,
   isValidUrl,
   flush,
+  reloadForUser,
   destroy,
   setLogLevel,
 };

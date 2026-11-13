@@ -1276,6 +1276,8 @@ registerApp({
       'com.astroos.permissions',
       'com.astroos.sysaccess',
       'com.astroos.launcher',
+      'com.astroos.setup',
+      'com.astroos.novareg',
     ]);
     const LOG_KEY = 'nova_appmanager_log'; // legacy seed + fallback; live path is HKND/appmanager/log
 
@@ -1528,11 +1530,12 @@ registerApp({
     window.addEventListener('storage', e => {
       if (e.key === APPS_KEY) syncInstalledApps();
     });
-    // The inventory lives in HKNS/apps/installed now — live-sync on
-    // registry writes too (NovaReg, reg CLI, other windows).
+    // The inventory lives in the registry now (system packages in
+    // HKNS/apps/installed, the account's own installs in HKNU/apps/installed)
+    // — live-sync on registry writes too (NovaReg, reg CLI, other windows).
     if (window.OS?.events?.on) {
       OS.events.on('nova:reg:changed', (event) => {
-        if (event && event.path === 'HKNS/apps/installed') syncInstalledApps();
+        if (event && (event.path === 'HKNS/apps/installed' || event.path === 'HKNU/apps/installed')) syncInstalledApps();
       });
     }
 
@@ -1624,18 +1627,18 @@ registerApp({
       // ── Detail panel ───────────────────────────────────────────
       const detail = createEl('div', { className: 'am-detail', style: 'flex:1;display:flex;flex-direction:column;overflow:hidden;' });
 
-      // Package picker — SystemDialogs (multi-select), results wrapped as File
-      // objects so processFile/processFiles don't care where they came from.
+      // Pick paths only, then read one package at a time in processFile. Returning
+      // full file contents here duplicates large package buffers in the UI.
       installBtn.addEventListener('click', async () => {
         const picked = await SystemDialogs.open({
           title: 'Install .novaapp',
           multiple: true,
+          pathOnly: true,
           filter: (name, isDir) => isDir || name.endsWith('.novaapp'),
         });
         if (!picked?.length) return;
-        const files = picked.map(f => new File([f.content], f.name, { type: f.mimeType }));
-        if (files.length > 1) await processFiles(files);
-        else await processFile(files[0]);
+        if (picked.length > 1) await processFiles(picked);
+        else await processFile(picked[0]);
       }, listenerOpts);
 
       // ── Use disabled Set for O(1) lookups instead of Array.includes ──
@@ -2147,18 +2150,21 @@ registerApp({
         }
 
         const managedService = isManagedSystemPackage(app);
+        const firstBootOnly = app.id === 'com.astroos.setup';
         const launchBtn = makeActionBtn(
           managedService
             ? 'Managed by OS'
-            : app.id === 'com.astroos.launcher'
+            : firstBootOnly
+              ? 'First-boot only'
+              : app.id === 'com.astroos.launcher'
               ? 'Open (Managed Home)'
               : (app.id === APP_MANAGER_ID) ? 'Already Running' : (isDis ? 'Disabled' : 'Launch'),
           'play',
-          (managedService || app.id === 'com.astroos.launcher' || app.id === APP_MANAGER_ID || isDis)
+          (managedService || firstBootOnly || app.id === 'com.astroos.launcher' || app.id === APP_MANAGER_ID || isDis)
             ? 'background:var(--bg-elevated);border:1px solid var(--border-default);color:var(--text-muted);cursor:not-allowed;'
             : 'background:var(--accent);border:1px solid transparent;color:#fff;',
           () => {
-            if (managedService || app.id === 'com.astroos.launcher' ||
+            if (managedService || firstBootOnly || app.id === 'com.astroos.launcher' ||
                 isDis || app.id === APP_MANAGER_ID) return;
             if ((app.devOnly === true || app.manifest?.devOnly === true || DEV_ONLY_APP_IDS.has(app.id)) &&
                 OS.settings.get('devMode') !== true) {
@@ -2172,7 +2178,7 @@ registerApp({
             WM.createWindow(app.id);
           }
         );
-        if (managedService || app.id === 'com.astroos.launcher') {
+        if (managedService || firstBootOnly || app.id === 'com.astroos.launcher') {
           launchBtn.disabled = true;
         }
 
@@ -2388,12 +2394,20 @@ registerApp({
         }
 
         try {
-            const raw = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result);
-              reader.onerror = () => reject(reader.error || new Error('Could not read package file.'));
-              reader.readAsText(file);
-            });
+            let raw;
+            if (typeof file.path === 'string') {
+              if (typeof require !== 'function') throw new Error('Native package file access is unavailable.');
+              raw = await require('fs').promises.readFile(file.path, 'utf8');
+            } else if (typeof file.text === 'function') {
+              raw = await file.text();
+            } else {
+              raw = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(reader.error || new Error('Could not read package file.'));
+                reader.readAsText(file);
+              });
+            }
             let pkg;
 
             try {
@@ -2584,7 +2598,15 @@ registerApp({
               verified,
               signer,
               system,
-              source: previousInstall?.source || 'file',
+              // SECURITY (2026-11-12 audit, finding F2): never inherit the
+              // previous install's source on replace. Bundled system apps
+              // carry source 'system-bundle', and the UnrestrictedGate's
+              // provenance check trusts exactly that value — inheriting it
+              // here would let a replacement install masquerade as
+              // boot-reconciled system content. A package installed
+              // through this dialog is a FILE install, period; only
+              // boot.reconcileBundledNovaApps() may mint 'system-bundle'.
+              source: 'file',
               installedAt: previousInstall?.installedAt || Date.now(),
               lastUpdateSource: previousInstall ? 'file' : null,
               lastUpdatedAt: previousInstall ? Date.now() : previousInstall?.lastUpdatedAt || null,

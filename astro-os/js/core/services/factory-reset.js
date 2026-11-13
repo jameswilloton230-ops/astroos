@@ -27,7 +27,7 @@
     }
   }
 
-  function isNbospLinuxRuntime(runtime = {}) {
+  function isAstroosLinuxRuntime(runtime = {}) {
     const hasProcess = typeof process !== 'undefined';
     const os = require('os');
     const path = require('path');
@@ -42,7 +42,7 @@
   }
 
   async function performLinuxFactoryReset() {
-    if (!isNbospLinuxRuntime()) return false;
+    if (!isAstroosLinuxRuntime()) return false;
 
     const fs = require('fs').promises;
     const { execFile } = require('child_process');
@@ -58,7 +58,7 @@
     return true;
   }
 
-  const api = Object.freeze({ clearDirectoryContents, isNbospLinuxRuntime, performLinuxFactoryReset });
+  const api = Object.freeze({ clearDirectoryContents, isAstroosLinuxRuntime, performLinuxFactoryReset });
   global.NovaFactoryReset = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

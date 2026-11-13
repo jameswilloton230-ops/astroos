@@ -740,22 +740,121 @@ registerApp({
     function renderSystem() {
       mainContent.appendChild(createEl('h2', { textContent: 'System', style: { marginBottom: '20px' } }));
 
-      // User
-      const userGroup = createEl('div', { className: 'nook-group' });
-      userGroup.appendChild(createEl('div', { className: 'nook-group-title', textContent: 'User' }));
-      const userRow = createEl('div', { className: 'nook-row' });
-      const userLabel = createEl('label', { className: 'nook-row-label', htmlFor: 'system-username-input', textContent: 'Username' });
-      userRow.appendChild(userLabel);
-      const userInput = createEl('input', {
-        className: 'input', id: 'system-username-input', name: 'system-username',
-        style: { width: '150px' }, value: OS.username
-      });
-      userInput.addEventListener('change', () => {
-        systemSettings.set('username', userInput.value || 'user');
-      }, { signal: lifecycle.signal });
-      userRow.appendChild(userInput);
-      userGroup.appendChild(userRow);
-      mainContent.appendChild(userGroup);
+      // Multi-user machines manage accounts and PINs in the Users app; the
+      // single-user username/PIN controls only apply while multi-user is off.
+      const multiUser = typeof NovaUserScope !== 'undefined' && !!NovaUserScope?.enabled?.();
+
+      if (multiUser) {
+        const accountsGroup = createEl('div', { className: 'nook-group' });
+        accountsGroup.appendChild(createEl('div', { className: 'nook-group-title', textContent: 'Accounts' }));
+        const accountsRow = createEl('div', { className: 'nook-row' });
+        accountsRow.appendChild(createEl('span', { className: 'nook-row-label', textContent: 'Manage user accounts' }));
+        const usersBtn = createEl('button', { className: 'btn btn-sm', textContent: 'Open Users' });
+        usersBtn.addEventListener('click', () => {
+          WM.createWindow('com.astroos.users');
+        }, { signal: lifecycle.signal });
+        accountsRow.appendChild(usersBtn);
+        accountsGroup.appendChild(accountsRow);
+
+        // Voluntary PIN change for the signed-in account. The server wants the
+        // current PIN here; only the forced post-reset flow skips it.
+        if (typeof SessionManager !== 'undefined' && SessionManager?.changePin) {
+          const myPinRow = createEl('div', { className: 'nook-row' });
+          myPinRow.appendChild(createEl('span', { className: 'nook-row-label', textContent: 'Your PIN' }));
+          const myPinBtn = createEl('button', { className: 'btn btn-sm', textContent: 'Change PIN' });
+          myPinBtn.addEventListener('click', async () => {
+            const currentPin = await showModal('Change PIN', 'Enter current PIN:', [
+              { label: 'Cancel' }, { label: 'Next', value: 'next' }
+            ], 'password');
+            if (!isAlive() || !currentPin) return;
+
+            const pin1 = await showModal('New PIN', 'Enter a new PIN (4–6 digits):', [
+              { label: 'Cancel' }, { label: 'Next', value: 'next' }
+            ], 'password');
+            if (!isAlive() || !pin1) return;
+            if (!/^\d{4,6}$/.test(pin1)) {
+              showModal('Invalid PIN', 'PIN must be 4 to 6 digits.');
+              return;
+            }
+
+            const pin2 = await showModal('Confirm PIN', 'Re-enter your new PIN:', [
+              { label: 'Cancel' }, { label: 'Set PIN', value: 'confirm' }
+            ], 'password');
+            if (!isAlive()) return;
+            if (pin1 !== pin2) {
+              showModal('PIN Mismatch', 'The PINs do not match. Please try again.');
+              return;
+            }
+
+            const result = await SessionManager.changePin(currentPin, pin1);
+            if (!isAlive()) return;
+            if (!result?.ok) {
+              showModal('PIN not changed', result?.message || 'PIN change failed.');
+              return;
+            }
+            Notify.show({ title: 'PIN Updated', body: 'Your PIN has been changed', type: 'success', appName: 'Settings' });
+          }, { signal: lifecycle.signal });
+          myPinRow.appendChild(myPinBtn);
+          accountsGroup.appendChild(myPinRow);
+
+          // Passphrase: min length comes from the machine policy, so the server
+          // does the length check and we just show its message.
+          if (SessionManager.changePassphrase) {
+            const phraseRow = createEl('div', { className: 'nook-row' });
+            phraseRow.appendChild(createEl('span', { className: 'nook-row-label', textContent: 'Your passphrase' }));
+            const phraseBtn = createEl('button', { className: 'btn btn-sm', textContent: 'Change passphrase' });
+            phraseBtn.addEventListener('click', async () => {
+              const current = await showModal('Change passphrase', 'Enter your current PIN or passphrase:', [
+                { label: 'Cancel' }, { label: 'Next', value: 'next' }
+              ], 'password');
+              if (!isAlive() || !current) return;
+
+              const phrase1 = await showModal('New passphrase', 'Enter a new passphrase:', [
+                { label: 'Cancel' }, { label: 'Next', value: 'next' }
+              ], 'password');
+              if (!isAlive() || !phrase1) return;
+
+              const phrase2 = await showModal('Confirm passphrase', 'Re-enter your new passphrase:', [
+                { label: 'Cancel' }, { label: 'Set passphrase', value: 'confirm' }
+              ], 'password');
+              if (!isAlive()) return;
+              if (phrase1 !== phrase2) {
+                showModal('Passphrase Mismatch', 'The passphrases do not match. Please try again.');
+                return;
+              }
+
+              const result = await SessionManager.changePassphrase(current, phrase1);
+              if (!isAlive()) return;
+              if (!result?.ok) {
+                showModal('Passphrase not changed', result?.message || 'Passphrase change failed.');
+                return;
+              }
+              Notify.show({ title: 'Passphrase Updated', body: 'Your passphrase has been changed', type: 'success', appName: 'Settings' });
+            }, { signal: lifecycle.signal });
+            phraseRow.appendChild(phraseBtn);
+            accountsGroup.appendChild(phraseRow);
+          }
+        }
+
+        mainContent.appendChild(accountsGroup);
+      } else {
+        // User
+        const userGroup = createEl('div', { className: 'nook-group' });
+        userGroup.appendChild(createEl('div', { className: 'nook-group-title', textContent: 'User' }));
+        const userRow = createEl('div', { className: 'nook-row' });
+        const userLabel = createEl('label', { className: 'nook-row-label', htmlFor: 'system-username-input', textContent: 'Username' });
+        userRow.appendChild(userLabel);
+        const userInput = createEl('input', {
+          className: 'input', id: 'system-username-input', name: 'system-username',
+          style: { width: '150px' }, value: OS.username
+        });
+        userInput.addEventListener('change', () => {
+          systemSettings.set('username', userInput.value || 'user');
+        }, { signal: lifecycle.signal });
+        userRow.appendChild(userInput);
+        userGroup.appendChild(userRow);
+        mainContent.appendChild(userGroup);
+      }
 
       // Lock screen
       const lockGroup = createEl('div', { className: 'nook-group' });
@@ -821,7 +920,7 @@ registerApp({
         pinRow.appendChild(removePinBtn);
       }
       lockGroup.appendChild(pinRow);
-      mainContent.appendChild(lockGroup);
+      if (!multiUser) mainContent.appendChild(lockGroup);
 
       // Recovery
       const recoveryGroup = createEl('div', { className: 'nook-group' });
@@ -924,24 +1023,10 @@ registerApp({
           style: 'font-size:14px;color:var(--text-secondary,#aaa);line-height:1.55;margin-bottom:18px;white-space:pre-line;max-height:340px;overflow-y:auto;padding-right:4px;'
         });
         body.textContent =
-          'WARNING: Developer Mode lowers the system\'s security posture and grants elevated access to internal components.\n\n' +
-          'When enabled, the following restrictions are relaxed:\n' +
-          '\u2022 Unrestricted access to the filesystem, networks, and system APIs\n' +
-          '\u2022 Elevated permissions to internal system modules and runtime internals\n' +
-          '\u2022 Visibility into running processes, memory, and module state\n' +
-          '\u2022 The ability to inspect, alter, or revoke app permissions\n' +
-          '\u2022 The ability to install, remove, or modify system packages\n\n' +
+          'WARNING: Developer Mode enables development and diagnostic tools that can expose or change sensitive system state.\n\n' +
+          'Developer Mode does not by itself disable the app sandbox or grant every app unrestricted filesystem, network, or system access. Tools and actions remain subject to their own permission checks. Use these capabilities only on a device you trust.\n\n' +
           'Developer Mode also makes it possible to enable Root Access in Settings. Root Access is a separate device-wide switch, and each app still needs its own explicit grant. A root-approved app runs directly inside the OS page without a sandbox and can read or change system data and UI. Only grant it to apps you fully trust.\n\n' +
-          'The following internal apps and tools become accessible:\n' +
-          '\u2022 Console — runs arbitrary JavaScript in the full OS context with no sandboxing\n' +
-          '\u2022 Inspector — can force-close arbitrary windows and export app state\n' +
-          '\u2022 Packages — can install unsigned or unverified packages into the live registry, and can add a locally-generated signing key to this device\u2019s trust store for the current session (only affects installs on this machine; never affects other clones, forks, or devices)\n' +
-          '\u2022 Modules — can dynamically import arbitrary module paths for live code execution\n' +
-          '\u2022 Permissions — can bulk-grant or revoke permissions for any app without user consent\n' +
-          '\u2022 Perf — exposes detailed runtime performance data, memory usage, and per-window DOM breakdowns\n' +
-          '\u2022 SysAccess — can read the virtual filesystem and probe internal network/SSRF configuration\n' +
-          '\u2022 Events — full visibility into all system-wide activity, including console output, permission checks, package operations, and app event data payloads across every app and OS component\n' +
-          '\u2022 Debug Overlay — persistent always-on-top diagnostics overlay exposing GPU, memory, URLs, and OS internals (F3)\n\n' +
+          'Developer Mode is intended for development, debugging, and system maintenance. Enable it only when needed, and leave it disabled during normal use.';
           'Developer Mode is intended solely for development, debugging, and system maintenance. Enable it only when you understand the risks. Leave it disabled during normal use.';
         dialog.appendChild(body);
 
@@ -2904,7 +2989,8 @@ registerApp({
           className: 'empty-state',
           textContent: !devMode
             ? 'Root execution is disabled until Developer Mode and Root Access are both enabled.'
-            : 'Root execution is disabled. Turn on Root Access to manage root-enabled apps and activity.'
+            : 'Root execution is disabled. Turn on Root Access to manage root-enabled apps and activity.',
+          style: { height: 'auto', padding: '18px 0', alignItems: 'flex-start', justifyContent: 'flex-start' }
         }));
         return;
       }
@@ -3276,7 +3362,6 @@ registerApp({
         clearTimeout(_tapTimer);
         _tapTimer = setTimeout(() => { _tapCount = 0; buildHint.textContent = ''; }, 2000);
       }, { signal: lifecycle.signal });
-
       swRows.appendChild(buildRow);
 
       // AstroOS version row
@@ -3288,16 +3373,36 @@ registerApp({
       swRows.appendChild(mkRow('Operating System', linuxInfo.distribution, false));
       swRows.appendChild(mkRow('Linux Kernel', linuxInfo.kernel, false));
       swRows.appendChild(mkRow('Architecture', linuxInfo.architecture, false));
-      swRows.appendChild(mkRow('Source Date', '2026-11-04', false));
+      swRows.appendChild(mkRow('Build Date', '2026-11-13'));
 
-      // Security patch row
+      // Security patch row — level comes from the platform when it knows it
       const patchRow = createEl('div', { style: 'display:flex;justify-content:space-between;align-items:center;padding:11px 0;font-size:12.5px;' });
       patchRow.appendChild(createEl('span', { textContent: 'Security patch level', style: 'color:rgba(255,255,255,0.5);' }));
       const patchBadge = createEl('span', { style: 'background:rgba(63,185,80,0.12);border:1px solid rgba(63,185,80,0.3);border-radius:20px;padding:2px 10px;font-size:10.5px;font-weight:700;color:#3fb950;' });
-      patchBadge.textContent = '\uD83D\uDD12 2026-08-02';
+      patchBadge.textContent = '\uD83D\uDD12 ' + (typeof OS !== 'undefined' && OS.securityPatch ? OS.securityPatch : '2026-11-12');
       patchRow.appendChild(patchBadge);
       swRows.appendChild(patchRow);
 
+      // Platform signature tier — the AOSP ro.build.tags-style label for the
+      // active System signing key: 'test-keys' on the committed public test
+      // pair (every default clone/fork build), 'release-keys' after the
+      // operator rotated to an offline release key (see astro-os/keys/README.md).
+      const signatureTier = (typeof TrustStore !== 'undefined' && TrustStore?.systemSignatureTier)
+        ? TrustStore.systemSignatureTier()
+        : 'test-keys';
+      const tierRow = createEl('div', { style: 'display:flex;justify-content:space-between;align-items:center;padding:11px 0;font-size:12.5px;' });
+      tierRow.appendChild(createEl('span', { textContent: 'Platform signature', style: 'color:rgba(255,255,255,0.5);' }));
+      const tierBadge = createEl('span', {
+        style: signatureTier === 'release-keys'
+          ? 'background:rgba(63,185,80,0.12);border:1px solid rgba(63,185,80,0.3);border-radius:20px;padding:2px 10px;font-size:10.5px;font-weight:700;color:#3fb950;'
+          : 'background:rgba(255,159,10,0.12);border:1px solid rgba(255,159,10,0.35);border-radius:20px;padding:2px 10px;font-size:10.5px;font-weight:700;color:#ff9f0a;',
+        title: signatureTier === 'release-keys'
+          ? 'System packages are verified against the operator\u2019s rotated release key.'
+          : 'System packages are verified against the AOSP-style public test key committed in the repository (astro-os/keys/). Fine for development and forks; production machines should rotate to a release key.',
+        textContent: signatureTier === 'release-keys' ? '\uD83D\uDD12 Release keys' : '\u26A0\uFE0F Test keys'
+      });
+      tierRow.appendChild(tierBadge);
+      swRows.appendChild(tierRow);
       body.appendChild(swWrap);
 
       // ── CARD 2: DEVICE ────────────────────────────────────────────────────
@@ -3343,7 +3448,7 @@ registerApp({
       const { wrap: lgWrap, rows: lgRows } = mkCard('Legal', 'gavel');
       [
         ['Licence', 'MIT'],
-        ['NBOSP base licence', 'Apache 2.0'],
+        ['NovaByte base licence', 'Apache 2.0'],
         ['Copyright', '\u00A9 2026 jameswilloton230-ops'],
         ['Telemetry', 'Zero. None. Zilch.'],
       ].forEach(([l, v], i, a) => lgRows.appendChild(mkRow(l, v, i === a.length - 1)));
@@ -3359,6 +3464,13 @@ registerApp({
           'AstroOS v' + OS.version + ' (based on NovaByte v' + OS.version + ')',
           'Build: astro-' + OS.version + '-stable',
           'Security patch: 2026-08-02',
+          'Operating System: ' + linuxInfo.distribution,
+          'Linux Kernel: ' + linuxInfo.kernel,
+          'Architecture: ' + linuxInfo.architecture,
+          'AstroOS v' + OS.version + ' (based on NovaByte v' + OS.version + ')',
+          'Build: astro-' + OS.version + '-stable',
+          'Security patch: ' + (typeof OS !== 'undefined' && OS.securityPatch ? OS.securityPatch : '2026-11-12'),
+          'Platform signature: ' + signatureTier,
           'Operating System: ' + linuxInfo.distribution,
           'Linux Kernel: ' + linuxInfo.kernel,
           'Architecture: ' + linuxInfo.architecture,

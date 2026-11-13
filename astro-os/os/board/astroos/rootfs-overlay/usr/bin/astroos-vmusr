@@ -4,14 +4,19 @@
 # astroos user come from there.
 #
 # These plugins are X11 clients. The session exports GDK_BACKEND=wayland for
-# NW.js, so it is overridden here. cage starts Xwayland lazily, so wait for it
+# NW.js, so it is overridden here. labwc starts Xwayland lazily, so wait for it
 # rather than being the client that triggers its startup.
 
 # The session points LD_LIBRARY_PATH at NW.js's bundled libraries, including
 # its own libEGL and libGLESv2. Everything started here must use the system ones.
 unset LD_LIBRARY_PATH
 
-LOG=/home/astroos/vmusr.log
+# Session logs belong in /var/log/astroos â never in the kiosk user's home
+# (the home is the system area: ~/users/<account>/ trees + hidden dot-state).
+LOG_DIR=/var/log/astroos
+mkdir -p "$LOG_DIR" 2>/dev/null || true
+LOG="$LOG_DIR/vmusr.log"
+
 PLUGIN_DIR=/usr/lib/open-vm-tools/plugins/vmusr
 
 /usr/bin/vmware-checkvm >/dev/null 2>&1 || exit 0

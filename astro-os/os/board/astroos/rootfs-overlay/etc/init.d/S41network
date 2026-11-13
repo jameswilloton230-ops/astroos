@@ -9,13 +9,21 @@ IFACE=eth0
 CONSOLE=${CONSOLE:-/dev/console}
 WAIT=${S41_WAIT:-20}
 
-# /etc/resolv.conf is a symlink to /tmp/resolv.conf (tmpfs), so on every boot
+# /etc/resolv.conf is a symlink to /run/resolv.conf (tmpfs), so on every boot
 # it dangles until NetworkManager gets a lease. Anything that resolves a name
 # before then (or when DHCP hands out no DNS) fails with a DNS error even
-# though the interface looks up. Seed it with public resolvers; NM replaces
-# the file as soon as a connection brings its own servers.
+# though the interface looks up. Seed the real runtime path with public
+# resolvers; NM replaces the file as soon as a connection brings its own
+# servers. If the symlink is broken or missing, repair it before DNS lookups
+# start.
 seed_resolv() {
-  target=/tmp/resolv.conf
+  mkdir -p /run
+
+  if [ ! -e /etc/resolv.conf ] || { [ -L /etc/resolv.conf ] && [ ! -e /etc/resolv.conf ]; }; then
+    ln -sf /run/resolv.conf /etc/resolv.conf
+  fi
+
+  target=/run/resolv.conf
   if ! grep -q '^nameserver' "$target" 2>/dev/null; then
     printf '# astroos fallback, replaced by NetworkManager\nnameserver 1.1.1.1\nnameserver 8.8.8.8\n' > "$target"
   fi

@@ -233,13 +233,17 @@ describe("'Settings' app (js/apps/settings)", () => {
     sidebarBtn(content, 'About').click();
     const about = content.querySelector('.nook-content');
 
-    expect(about.textContent).toContain('Software Information');
-    expect(about.textContent).toContain('AstroOS Version');
+    expect(about.textContent).toContain('Software');
+    expect(about.textContent).toContain('AstroOS version');
     expect(about.textContent).toContain('v3.0.2');
+    expect(about.textContent).toContain('Build number');
+    expect(about.textContent).toContain('NovaByte base');
+    expect(about.textContent).toMatch(/Build Date\s*\d{4}-\d{2}-\d{2}/);
+    expect(about.textContent).toContain('Platform signature');
     // jsdom has no Node process → the non-Linux fallback values.
     expect(about.textContent).toContain('Not running on Linux');
     expect(about.textContent).toContain('Unavailable');
-    expect(about.textContent).toContain('CPU Cores');
+    expect(about.textContent).toContain('CPU cores');
     expect(about.textContent).toContain('8'); // hardware.cpu.logicalCores
     expect(about.textContent).toContain('Mesa llvmpipe');
     expect(about.textContent).toContain('KVM');
@@ -248,9 +252,23 @@ describe("'Settings' app (js/apps/settings)", () => {
     // jsdom exposes no navigator.clipboard → the guarded copy path surfaces
     // a "Copy Failed" notification instead of writing the clipboard.
     [...about.querySelectorAll('button')]
-      .find((b) => b.textContent.includes('Copy System Info')).click();
+      .find((b) => b.textContent.includes('Copy system info')).click();
     await settle(20);
     expect(notify.calls.some((n) => n.title === 'Copy Failed')).toBe(true);
+  });
+
+  it('keeps the disabled Root Access notice compact instead of filling the pane', async () => {
+    const { content } = await loadSettings({
+      system: makeAstroOSSystem({ devMode: false, rootAccessEnabled: false }),
+    });
+    sidebarBtn(content, 'Root Access').click();
+    const notice = content.querySelector('.nook-content .empty-state');
+
+    expect(notice).not.toBeNull();
+    expect(notice.style.height).toBe('auto');
+    expect(notice.style.padding).toBe('18px 0px');
+    expect(notice.style.alignItems).toBe('flex-start');
+    expect(notice.style.justifyContent).toBe('flex-start');
   });
 
   it('degrades connectivity, default-apps and storage sections without host services', async () => {

@@ -133,6 +133,20 @@ describe('Gallery app (js/apps/gallery)', () => {
     expect(labels).not.toContain('trashed.png');
   });
 
+  it('opens the requested file and removes its placeholder icon from the image card', async () => {
+    const opened = { id: 'opened', name: 'opened.avif', type: 'file', parentId: null, content: PNG_BYTES, mimeType: 'image/avif', modified: 1 };
+    const { content, window } = await loadGallery({ fsNodes: [opened], state: { fileId: opened.id } });
+    window.document.body.appendChild(content);
+    content.querySelector('button[title="Refresh"]').click();
+    await settle();
+    const card = content.querySelector('[role="button"][aria-label="opened.avif"]');
+
+    expect(content.querySelector('[role="dialog"]').style.display).toBe('flex');
+    expect(card.querySelector('img')).toBeTruthy();
+    expect(card.querySelector('[data-image-placeholder]')).toBeNull();
+    expect(card.querySelector('img').style.position).toBe('absolute');
+  });
+
   it('opens the lightbox from a card, navigates with next/prev and closes on Escape', async () => {
     const a = { id: 'img-a', name: 'a.png', type: 'file', parentId: 'desktop-id', content: PNG_BYTES, mimeType: 'image/png', modified: 100 };
     const b = { id: 'img-b', name: 'b.jpg', type: 'file', parentId: 'desktop-id', content: PNG_BYTES, mimeType: 'image/jpeg', modified: 300 };

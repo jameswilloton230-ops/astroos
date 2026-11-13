@@ -2,6 +2,7 @@
 # The custom inittab doesn't run `mount -a` and the image has no fstab, so
 # Mount procfs and sysfs before udev, DRM, and the kiosk need their kernel
 # interfaces. The desktop also needs /dev/shm, /dev/pts, and writable /tmp.
+# Services use /run for per-boot state, so mount it before creating runtime locks.
 
 mounted() {
   grep -q " $1 " /proc/mounts 2>/dev/null
@@ -9,13 +10,15 @@ mounted() {
 
 case "$1" in
   start)
-    mkdir -p /proc /sys /dev/pts /dev/shm /tmp /var/lock/subsys
+    mkdir -p /proc /sys /dev/pts /dev/shm /tmp /run
     mounted /proc || mount -t proc proc /proc
     mounted /sys || mount -t sysfs sysfs /sys
     mounted /dev/pts || mount -t devpts -o gid=5,mode=620,noexec,nosuid devpts /dev/pts
     mounted /dev/shm || mount -t tmpfs -o mode=1777,nosuid,nodev tmpfs /dev/shm
     mounted /tmp || mount -t tmpfs -o mode=1777,nosuid,nodev tmpfs /tmp
+    mounted /run || mount -t tmpfs -o mode=0755,nosuid,nodev tmpfs /run
     chmod 1777 /tmp /dev/shm
+    mkdir -p /run/lock/subsys /var/lock/subsys
     mkdir -p /tmp/.X11-unix
     chmod 1777 /tmp/.X11-unix
     ;;

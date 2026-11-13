@@ -127,6 +127,7 @@ function createLoaderContext({
         registeredServices.set(service.id, service);
         return service;
       }),
+      unregisterSystemService: vi.fn(id => registeredServices.delete(id)),
     },
     addEventListener: vi.fn((type, listener) => eventListeners.set(type, listener)),
     removeEventListener: vi.fn((type, listener) => {
@@ -225,8 +226,22 @@ describe('SystemServiceLoader', () => {
       system: true,
       headlessSystemService: true,
     });
+
     expect(registeredServices.size).toBe(2);
     expect(context.AppRegistry.registerSystemService).toHaveBeenCalledTimes(2);
+  });
+
+  it('unregisters a service from both AppRegistry and the loader list', async () => {
+    const { context, registeredServices } = createLoaderContext();
+    runInNewContext(loaderSource, context);
+    await context.SystemServiceLoader.load();
+
+    expect(context.SystemServiceLoader.listLoadedServices()).toHaveLength(2);
+    expect(context.SystemServiceLoader.unregisterService('com.example.first')).toBe(true);
+    expect(registeredServices.has('com.example.first')).toBe(false);
+    expect(context.SystemServiceLoader.listLoadedServices().map(service => service.id))
+      .toEqual(['com.example.second']);
+    expect(context.SystemServiceLoader.unregisterService('com.example.first')).toBe(false);
   });
 
   it('starts the App Loader Optimiser before loading later service packages', async () => {

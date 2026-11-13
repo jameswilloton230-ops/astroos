@@ -49,7 +49,9 @@ function installIdbStub() {
         });
       },
       put(row) {
-        return simple(() => { store().rows.set(kkey([row.appId, row.key]), { ...row }); });
+        // v2 schema: rows keyed [ownerUid, appId, key] — ownerUid is stamped
+        // by the host at the enforcement point (multi-user scoping).
+        return simple(() => { store().rows.set(kkey([row.ownerUid ?? '', row.appId, row.key]), { ...row }); });
       },
       delete(key) {
         return simple(() => { store().rows.delete(kkey(key)); });
@@ -63,14 +65,18 @@ function installIdbStub() {
             const req = { result: undefined, error: null, onsuccess: null, onerror: null };
             /* Real IDB cursors iterate a snapshot of the range — deletes of
                already-visited rows must not shift the remaining sequence. */
-            const all = [...store().rows.values()].filter((row) => row.appId === range.__only);
+            /* v2: by_owner_app index — ranges carry [ownerUid, appId]. */
+            const pair = Array.isArray(range.__only) ? range.__only : null;
+            const all = [...store().rows.values()].filter((row) =>
+              pair ? (row.ownerUid ?? '') === pair[0] && row.appId === pair[1]
+                   : row.appId === range.__only);
             let i = 0;
             const deliver = () => {
               if (i < all.length) {
                 const row = all[i];
                 req.result = {
                   value: { ...row },
-                  delete: () => { state.stores[name].rows.delete(kkey([row.appId, row.key])); },
+                  delete: () => { state.stores[name].rows.delete(kkey([row.ownerUid ?? '', row.appId, row.key])); },
                   continue: () => { i++; queueMicrotask(deliver); },
                 };
                 try { req.onsuccess?.({ target: req }); }

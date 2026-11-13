@@ -18,38 +18,39 @@
  * This script never deletes or modifies the source folder. It only
  * writes the .novaapp file alongside it.
  *
- * ── Signing ─────────────────────────────────────────────────
+ * ── Signing (AOSP-style test keys) ──────────────────────────
  *
- * Generated packages are signed using the Ed25519 private key stored at:
+ * Generated packages are signed with the Astro System Ed25519 key
+ * (signer identity "Astro System").
  *
- *   astro-os/keys/test-system-key.json
+ * Key selection follows the Android/AOSP model (see keys/README.md):
  *
- * The signer identity is:
+ *   1. ASTROOS_SYSTEM_SIGNING_KEY_PATH — path to a JWK JSON file holding
+ *      your OFFLINE release private key (never committed).
+ *   2. ASTROOS_SYSTEM_SIGNING_KEY      — inline JWK JSON (same rule).
+ *   3. Default: the PUBLIC test pair committed at
+ *      astro-os/keys/test-system-key.json — AstroOS's equivalent of
+ *      AOSP's platform test keys.
  *
- *   Astro System
+ * A fresh clone or fork with no configuration therefore builds
+ * TEST-SIGNED packages that verify as "Astro System" against the
+ * trust-store anchor — exactly like an AOSP build signed with the
+ * public platform test keys boots and works out of the box. Packages
+ * built this way carry signing.tier "test" and the OS reports
+ * systemSignatureTier() "test-keys".
  *
- * The package signing payload is signed using Ed25519, matching the
- * runtime package verifier.
+ * A configured env key is treated as the RELEASE key: packages carry
+ * signing.tier "release" and the matching trust anchor must be rotated
+ * on the serving side through ASTROOS_SYSTEM_SIGNING_PUBLIC_JWK (the
+ * server injects it into the page; see trust-store.js).
  *
- * IMPORTANT:
- *
- * The bundled test-system-key.json contains a deliberately public
- * development/test private key. Anyone building upon AstroOS can use it
- * to test the System signing flow.
- *
- * Because the private key is intentionally distributed, signatures
- * produced with this key MUST NOT be considered proof of genuine
- * production System authorization.
- *
- * For actual System privilege protection, replace the test key with
- * your own privately-held Ed25519 key pair.
- *
- * Keep your private key outside the repository and commit ONLY the
- * corresponding public key to trust-store.js.
- *
- * You can also change DEFAULT_SIGNER if your fork uses a different
- * signer identity, but it must match the identity expected by the
- * package verification logic.
+ * The 2026-11-12 audit (F1) removed a committed development key whose
+ * private half matched the trust anchor while the build still REQUIRED
+ * an env key — producing unsigned, unverifiable packages for every
+ * fresh clone, which broke forks. The AOSP-style committed test key
+ * restores the working default without pretending the test key is a
+ * secret: it is public on purpose, honestly labelled, and production
+ * machines rotate per keys/README.md.
  *
  * Usage:
  *
@@ -92,25 +93,19 @@ const requestedApps = process.argv.slice(3);
 /*
  * ── Signing configuration ─────────────────────────────────────────────
  *
- * This is the intentionally-public AstroOS development/test key.
- *
- * The matching private key is located at:
- *
- *   astro-os/keys/test-system-key.json
- *
- * Anyone building upon AstroOS may use it for development and testing.
- *
- * For real System privilege protection, replace the test private key
- * with your own privately-held Ed25519 key and replace the public key
- * in trust-store.js with the corresponding public key.
+ * Priority (Android/AOSP model — see the header comment and
+ * astro-os/keys/README.md):
+ *   1. ASTROOS_SYSTEM_SIGNING_KEY_PATH — release private key file (JWK)
+ *   2. ASTROOS_SYSTEM_SIGNING_KEY     — release private key inline JWK JSON
+ *   3. The committed public test pair at keys/test-system-key.json
+ * A supplied-but-malformed key is a hard error — a silently-wrong
+ * signature would be worse than no signature. An empty-string env var
+ * counts as unset, so a plain `node build-apps.mjs` in a fresh clone
+ * still gets test-key signing.
  */
 const DEFAULT_SIGNER = 'Astro System';
+const TEST_KEY_PATH = path.join(projectRoot, 'keys', 'test-system-key.json');
 
-const TEST_SIGNING_KEY_PATH = path.join(
-  projectRoot,
-  'keys',
-  'test-system-key.json'
-);
 
 /**
  * Recursively collects every file under `dir`.
@@ -162,35 +157,17 @@ async function collectFiles(dir, baseDir) {
 }
 
 /**
- * Loads the Ed25519 private signing key from the test-key JSON file.
- *
- * The test key is intentionally distributed with AstroOS so developers
- * can immediately test package signing.
- *
- * Production forks should replace this with a private key that is NOT
- * committed to the repository.
+ * Parses and validates an Ed25519 OKP private-key JWK.
+ * @throws on malformed input — never silently.
  */
-async function loadSigningKey() {
-  let raw;
-
-  try {
-    raw = await readFile(
-      TEST_SIGNING_KEY_PATH,
-      'utf8'
-    );
-  } catch (err) {
-    throw new Error(
-      `Unable to read signing key at ${TEST_SIGNING_KEY_PATH}: ${err.message}`
-    );
-  }
-
+function parseEd25519PrivateJwk(raw, origin) {
   let jwk;
 
   try {
     jwk = JSON.parse(raw);
   } catch (err) {
     throw new Error(
-      `Signing key is not valid JSON: ${err.message}`
+      `Signing key from ${origin} is not valid JSON: ${err.message}`
     );
   }
 
@@ -227,10 +204,72 @@ async function loadSigningKey() {
     );
   }
 
-  return createPrivateKey({
-    key: jwk,
-    format: 'jwk',
-  });
+  return jwk;
+}
+
+/**
+ * Loads the Ed25519 private signing key.
+ *
+ * Priority:
+ *   1. ASTROOS_SYSTEM_SIGNING_KEY_PATH — path to a JWK JSON file holding
+ *      the operator's OFFLINE release key (keep the file outside this
+ *      repository).
+ *   2. ASTROOS_SYSTEM_SIGNING_KEY     — inline JWK JSON string (release).
+ *   3. The committed AOSP-style public test pair at
+ *      astro-os/keys/test-system-key.json — the default every fresh clone
+ *      and fork signs with, so default builds verify as
+ *      'Astro System' everywhere.
+ *
+ * Returns { key, tier, origin } — tier is 'release' for env-supplied
+ * keys and 'test' for the committed test pair. A key that IS supplied
+ * but malformed is a hard error — a silently-wrong signature would be
+ * worse than no signature.
+ */
+async function loadSigningKey() {
+  const keyPath = process.env.ASTROOS_SYSTEM_SIGNING_KEY_PATH;
+  const keyInline = process.env.ASTROOS_SYSTEM_SIGNING_KEY;
+
+  let raw = null;
+  let origin = '';
+  let tier = 'test';
+
+  if (typeof keyPath === 'string' && keyPath.length > 0) {
+    origin = keyPath;
+    tier = 'release';
+    try {
+      raw = await readFile(keyPath, 'utf8');
+    } catch (err) {
+      throw new Error(
+        `Unable to read signing key at ${keyPath}: ${err.message}`
+      );
+    }
+  } else if (typeof keyInline === 'string' && keyInline.trim().length > 0) {
+    origin = 'ASTROOS_SYSTEM_SIGNING_KEY (inline)';
+    tier = 'release';
+    raw = keyInline;
+  } else {
+    origin = TEST_KEY_PATH;
+    try {
+      raw = await readFile(TEST_KEY_PATH, 'utf8');
+    } catch (err) {
+      throw new Error(
+        `Default test signing key missing at ${TEST_KEY_PATH}: ${err.message}. ` +
+        'Restore astro-os/keys/test-system-key.json (see keys/README.md) or set ' +
+        'ASTROOS_SYSTEM_SIGNING_KEY_PATH / ASTROOS_SYSTEM_SIGNING_KEY.'
+      );
+    }
+  }
+
+  const jwk = parseEd25519PrivateJwk(raw, origin);
+
+  return {
+    key: createPrivateKey({
+      key: jwk,
+      format: 'jwk',
+    }),
+    tier,
+    origin,
+  };
 }
 
 /**
@@ -254,15 +293,22 @@ function createSigningPayload(pkg) {
 }
 
 /**
- * Signs the canonical payload using Ed25519.
+ * Signs the canonical payload using Ed25519. `tier` records HOW the
+ * build was signed — 'test' (the committed AOSP-style public test key)
+ * or 'release' (an env-supplied offline key) — so downstream surfaces
+ * can label test-key builds honestly, the way Android tags
+ * ro.build.tags=test-keys. The tier lives INSIDE pkg.signing, which is
+ * excluded from createSigningPayload(), so it cannot affect the
+ * signature bytes.
  */
-function signPackage(pkg, privateKey) {
+function signPackage(pkg, privateKey, tier) {
   const payload = createSigningPayload(pkg);
   const signature = sign(null, Buffer.from(payload, 'utf8'), privateKey);
 
   return {
     method: 'ed25519',
     signer: DEFAULT_SIGNER,
+    tier: tier === 'release' ? 'release' : 'test',
     signature: signature.toString('hex'),
   };
 }
@@ -298,21 +344,35 @@ async function updatePackageCacheKeys(builtPackages) {
     throw new Error(`Cannot update NovaApp cache keys: ${manifestPath} must contain an array`);
   }
 
+  /* The runtime SystemServiceLoader rejects a bundle entry without
+   * systemService: true — the production build (build.mjs) stamps it from
+   * each package manifest. Dev builds used to write bare
+   * { id, file, cacheKey } entries, so every system service failed the
+   * loader's entry validation and dev machines booted without the
+   * session/lock-screen/tray services. Stamp the same flag here so a
+   * dev manifest and a production manifest are interchangeable. */
   let changed = false;
   const manifestIds = new Set(manifest.map(bundle => bundle?.id));
   for (const bundle of manifest) {
-    const cacheKey = builtPackages.get(bundle?.id);
-    if (cacheKey && bundle.cacheKey !== cacheKey) {
-      bundle.cacheKey = cacheKey;
-      changed = true;
+    const built = builtPackages.get(bundle?.id);
+    if (built) {
+      if (bundle.cacheKey !== built.cacheKey) {
+        bundle.cacheKey = built.cacheKey;
+        changed = true;
+      }
+      if (built.systemService === true && bundle.systemService !== true) {
+        bundle.systemService = true;
+        changed = true;
+      }
     }
   }
-  for (const [id, cacheKey] of builtPackages) {
+  for (const [id, built] of builtPackages) {
     if (manifestIds.has(id)) continue;
     manifest.push({
       id,
       file: `js/apps/${id}.novaapp`,
-      cacheKey,
+      cacheKey: built.cacheKey,
+      ...(built.systemService === true ? { systemService: true } : {}),
     });
     changed = true;
   }
@@ -395,7 +455,7 @@ async function packageApp(appDir) {
 
 async function buildOne(
   appDirName,
-  privateKey
+  signing
 ) {
   const appDir = path.join(
     appsDir,
@@ -427,14 +487,16 @@ async function buildOne(
     appDirName;
 
   /*
-   * Sign the package before writing it.
-   *
-   * `signing` itself is excluded from the signing payload, so the
-   * signature does not end up signing itself.
+   * Sign the package before writing it. Every build signs now — default
+   * builds with the committed AOSP-style test pair (tier 'test'), env-
+   * configured builds with the operator's offline release key (tier
+   * 'release'). `signing` itself is excluded from the signing payload,
+   * so the signature does not end up signing itself.
    */
   pkg.signing = signPackage(
     pkg,
-    privateKey
+    signing.key,
+    signing.tier
   );
   pkg.signature = pkg.signing.signature;
   pkg.integrity = computePackageIntegrity(pkg);
@@ -459,9 +521,9 @@ async function buildOne(
       outPath
     )} (${fileCount} file${
       fileCount === 1 ? '' : 's'
-    }, signed as ${pkg.signing.signer}, source untouched)`
+    }, ${`signed as ${pkg.signing.signer} (${signing.tier === 'release' ? 'release key' : 'TEST KEY'})`}, source untouched)`
   );
-  return { id: appId, cacheKey };
+  return { id: appId, cacheKey, systemService: manifest.systemService === true };
 }
 
 async function main() {
@@ -499,35 +561,48 @@ async function main() {
     return;
   }
 
-  console.log(
-    `Loading signing key: ${path.relative(
-      projectRoot,
-      TEST_SIGNING_KEY_PATH
-    )}`
-  );
+  const signing =
+    await loadSigningKey();
 
-  console.log(
-    `Signer: ${DEFAULT_SIGNER}`
-  );
-
-  console.log(
-    'Signature: Ed25519'
-  );
+  if (signing.tier === 'release') {
+    console.log(
+      `Signing key: RELEASE key from ${signing.origin}`
+    );
+    console.log(
+      `Signer: ${DEFAULT_SIGNER} (tier: release)`
+    );
+    console.log(
+      'Signature: Ed25519'
+    );
+    console.log(
+      'Rotate the runtime anchor to match: set ASTROOS_SYSTEM_SIGNING_PUBLIC_JWK'
+    );
+    console.log(
+      'for the server so trust-store.js verifies against this key (see keys/README.md).'
+    );
+  } else {
+    console.log(
+      'Signing key: AOSP-style PUBLIC test key (astro-os/keys/test-system-key.json)'
+    );
+    console.log(
+      `Signer: ${DEFAULT_SIGNER} (tier: test — build reports test-keys)`
+    );
+    console.log(
+      'Signature: Ed25519'
+    );
+  }
 
   console.log(
     `Building ${dirs.length} app(s) from ${appsDir}\n`
   );
 
-  const privateKey =
-    await loadSigningKey();
-
   const builtPackages = new Map();
   for (const dirName of dirs) {
     const built = await buildOne(
       dirName,
-      privateKey
+      signing
     );
-    if (built) builtPackages.set(built.id, built.cacheKey);
+    if (built) builtPackages.set(built.id, built);
   }
   await updatePackageCacheKeys(builtPackages);
 }

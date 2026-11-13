@@ -48,9 +48,9 @@ const DEFAULT_ALIASES = Object.freeze({
   ff: 'fastfetch'
 });
 
-function makeDefaultVariables(username) {
+function makeDefaultVariables(username, home = '/Desktop') {
   return {
-    HOME: '/Desktop',
+    HOME: home,
     USER: username,
     HOSTNAME: 'novabyteOS',
     SHELL: '/bin/sh',
@@ -350,7 +350,7 @@ function scrollOutput(tab) {
 }
 
 function getPromptStr(tab) {
-  const path = FS.getPath(tab.cwd).replace(/^\/Desktop/, '~');
+  const path = tab.cwd === FS.rootId ? '~' : FS.getPath(tab.cwd).replace(/^\/Desktop/, '~');
   return `<span class="shell-green">${escapeHtml(OS.username)}</span>:<span class="shell-blue">${escapeHtml(path)}</span>$ `;
 }
 
@@ -403,7 +403,7 @@ function getCompletions(tab, partial) {
 // path stays at root; `..` past root from a relative path returns false.
 
 function resolvePath(cwd, arg) {
-  if (!arg || arg === '~') return FS.specialFolders.desktop;
+  if (!arg || arg === '~') return FS.rootId;
   if (arg === '.') return cwd;
   const isAbsolute = arg.startsWith('/');
   const parts = arg.split('/').filter(Boolean);
@@ -431,7 +431,7 @@ function resolvePath(cwd, arg) {
 // handled directory traversal only, which made commands such as `cat path/file`
 // and `rm path/file` fail even though the node existed.
 function resolveNodePath(cwd, arg) {
-  if (!arg || arg === '~') return FS.specialFolders.desktop;
+  if (!arg || arg === '~') return FS.rootId;
   if (arg === '.') return cwd;
   const isAbsolute = arg.startsWith('/');
   const parts = arg.split('/').filter(Boolean);
@@ -485,6 +485,8 @@ const COMMANDS = {
     for (const [s, cmds] of sections) {
       writeHTML(tab, `  <span class="shell-yellow">${s}:</span> <span class="shell-dim">${cmds}</span>`);
     }
+    writeHTML(tab, `  <span class="shell-yellow">All commands:</span> <span class="shell-dim">${[...BUILTINS].join('  ')}</span>`);
+    writeHTML(tab, `  <span class="shell-yellow">Aliases:</span> <span class="shell-dim">${Object.keys(DEFAULT_ALIASES).join('  ')}</span>`);
     writeHTML(tab, `\n  <span class="shell-dim">Shortcuts: <span class="shell-green">Tab</span>=autocomplete  <span class="shell-green">↑↓</span>=history  <span class="shell-green">Ctrl+L</span>=clear  <span class="shell-green">Ctrl+C</span>=cancel</span>`);
     return '';
   },
@@ -659,7 +661,7 @@ const COMMANDS = {
   cd(tab, args) {
     if (!args[0] || args[0] === '~') {
       tab.prevCwd = tab.cwd;
-      tab.cwd = FS.specialFolders.desktop;
+      tab.cwd = FS.rootId;
       updatePrompt(tab);
       return '';
     }
@@ -1388,6 +1390,9 @@ function selectAllInOutput(tab) {
 function initLinuxTerminal(content, state) {
   const { spawn } = require('child_process');
   const os = require('os');
+  const home = typeof FS !== 'undefined' && typeof FS.rootId === 'string'
+    ? FS.rootId
+    : os.homedir();
   const controller = new AbortController();
   const root = createEl('div', { style: 'height:100%;display:flex;flex-direction:column;background:#0b0e14;color:#e6edf3;font:13px monospace;' });
   const output = createEl('pre', {
@@ -1442,8 +1447,8 @@ function initLinuxTerminal(content, state) {
   // interactive (which would warn that stdin has no controlling terminal).
   const startShell = () => {
     const child = spawn('/bin/sh', [], {
-      cwd: os.homedir(),
-      env: { ...process.env, TERM: process.env.TERM || 'xterm-256color', PS1: '' },
+      cwd: home,
+      env: { ...process.env, HOME: home, TERM: process.env.TERM || 'xterm-256color', PS1: '' },
       stdio: ['pipe', 'pipe', 'pipe'],
       detached: true
     });
@@ -1542,11 +1547,11 @@ registerApp({
     function createTab(label) {
       const tab = {
         label: label || 'Terminal',
-        cwd: FS.specialFolders.desktop,
+        cwd: FS.rootId,
         prevCwd: null,
         history: [],
         historyIdx: -1,
-        variables: makeDefaultVariables(OS.username),
+        variables: makeDefaultVariables(OS.username, FS.getPath(FS.rootId)),
         aliases: { ...DEFAULT_ALIASES },
         element: null,
         output: null,

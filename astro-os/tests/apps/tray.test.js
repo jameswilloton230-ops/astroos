@@ -1,5 +1,5 @@
 // tests/apps/tray.test.js — service app: tray flyouts (wifi, volume, calendar, battery).
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { resetTestStorage } from '../setup.js';
 import { loadServiceApp, settle } from '../helpers/app-harness.js';
@@ -18,7 +18,14 @@ const TRAY_MARKUP = `
     <button id="calendar-popup-prev"></button>
     <button id="calendar-popup-next"></button>
   </div>
-  <span id="tray-battery"></span>`;
+  <span id="tray-battery"></span>
+  <button id="tray-power" aria-expanded="false"></button>
+  <div id="power-menu">
+    <button role="menuitem" data-power-action="logoff">Log off</button>
+    <div data-power-separator></div>
+    <button role="menuitem" data-power-action="restart">Restart</button>
+    <button role="menuitem" data-power-action="poweroff">Power off</button>
+  </div>`;
 
 // The tray wires its DOM listeners while service.js is being evaluated (it
 // grabs #tray-* elements at the top of the script), so the harness's
@@ -26,7 +33,7 @@ const TRAY_MARKUP = `
 // scripts: [] (stubs still installed), populate the real jsdom document, and
 // eval the service script manually — the same mechanism the host uses, just
 // with the shell markup present.
-async function loadTray({ osOverrides = {}, AstroOSSystem, navigatorExtras } = {}) {
+async function loadTray({ osOverrides = {}, AstroOSSystem, navigatorExtras, globals = {} } = {}) {
   const os = {
     volume: 0,
     events: { emit: (...a) => emitted.push(a) },
@@ -36,7 +43,7 @@ async function loadTray({ osOverrides = {}, AstroOSSystem, navigatorExtras } = {
   const emitted = [];
   const { dom, window, document } = await loadServiceApp('tray', {
     scripts: [],
-    stubs: { extra: { OS: os, ...(AstroOSSystem ? { AstroOSSystem } : {}) } },
+    stubs: { extra: { OS: os, ...(AstroOSSystem ? { AstroOSSystem } : {}), ...globals } },
   });
   document.body.innerHTML = TRAY_MARKUP;
   for (const [key, value] of Object.entries(navigatorExtras ?? {})) {
@@ -239,5 +246,124 @@ describe('TrayService service (js/apps/tray)', () => {
     listeners.levelchange(); // live update path
     expect(btn.textContent).toBe('50%');
     expect(Object.isFrozen(window.TrayService)).toBe(true);
+  });
+  describe('power menu', () => {
+    const linuxAccounts = (extra = {}) => ({
+      process: { platform: 'linux' },
+      NovaUserScope: { enabled: () => true },
+      SessionManager: { logout: async () => ({ ok: true }) },
+      ...extra,
+    });
+
+    // jsdom has no popover support, so drive the toggle events by hand.
+    const toggle = (window, menu, type, newState) => {
+      const event = Object.assign(new window.Event(type, { cancelable: true }), { newState });
+      menu.dispatchEvent(event);
+      return event;
+    };
+    const item = (document, action) => document.querySelector(`[data-power-action="${action}"]`);
+    const click = async (document, action) => {
+      item(document, action).click();
+      await settle();
+    };
+
+    it('shows all three entries on Linux with accounts on, and syncs aria-expanded', async () => {
+      const { window, document } = await loadTray({ globals: linuxAccounts() });
+      const menu = document.getElementById('power-menu');
+
+      const opening = toggle(window, menu, 'beforetoggle', 'open');
+      expect(opening.defaultPrevented).toBe(false);
+      expect(['logoff', 'restart', 'poweroff'].map((a) => item(document, a).hidden)).toEqual([false, false, false]);
+      expect(document.querySelector('[data-power-separator]').hidden).toBe(false);
+
+      toggle(window, menu, 'toggle', 'open');
+      expect(document.getElementById('tray-power').getAttribute('aria-expanded')).toBe('true');
+      expect(document.activeElement).toBe(item(document, 'logoff'));
+      toggle(window, menu, 'toggle', 'closed');
+      expect(document.getElementById('tray-power').getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('hides restart and power off off-Linux, and refuses to open when nothing is left', async () => {
+      const { window, document } = await loadTray({ globals: linuxAccounts({ process: { platform: 'win32' } }) });
+      const menu = document.getElementById('power-menu');
+
+      expect(toggle(window, menu, 'beforetoggle', 'open').defaultPrevented).toBe(false);
+      expect(item(document, 'logoff').hidden).toBe(false);
+      expect(item(document, 'restart').hidden).toBe(true);
+      expect(item(document, 'poweroff').hidden).toBe(true);
+      expect(document.querySelector('[data-power-separator]').hidden).toBe(true);
+
+      const bare = await loadTray();
+      const bareMenu = bare.document.getElementById('power-menu');
+      expect(toggle(bare.window, bareMenu, 'beforetoggle', 'open').defaultPrevented).toBe(true);
+    });
+
+    it('log off signs out only after the dialog is confirmed', async () => {
+      const logout = vi.fn(async () => ({ ok: true }));
+      const showModal = vi.fn(async () => 'confirm');
+      const { window, document } = await loadTray({
+        globals: linuxAccounts({ SessionManager: { logout }, showModal }),
+      });
+      toggle(window, document.getElementById('power-menu'), 'beforetoggle', 'open');
+
+      await click(document, 'logoff');
+      expect(showModal.mock.calls[0][0]).toBe('Log off?');
+      expect(logout).toHaveBeenCalledTimes(1);
+
+      showModal.mockResolvedValueOnce('cancel');
+      await click(document, 'logoff');
+      expect(logout).toHaveBeenCalledTimes(1);
+    });
+
+    it('restart and power off call the system power API after confirming', async () => {
+      const power = { restart: vi.fn(async () => {}), powerOff: vi.fn(async () => {}) };
+      const { window, document } = await loadTray({
+        AstroOSSystem: { hardware: { power } },
+        globals: linuxAccounts({ showModal: async () => 'confirm' }),
+      });
+      toggle(window, document.getElementById('power-menu'), 'beforetoggle', 'open');
+
+      await click(document, 'restart');
+      expect(power.restart).toHaveBeenCalledTimes(1);
+      expect(power.powerOff).not.toHaveBeenCalled();
+      await click(document, 'poweroff');
+      expect(power.powerOff).toHaveBeenCalledTimes(1);
+    });
+
+    it('does nothing without a confirmation dialog, and reports a failed action', async () => {
+      const power = { restart: vi.fn(async () => {}) };
+      const noDialog = await loadTray({
+        AstroOSSystem: { hardware: { power } },
+        globals: linuxAccounts(),
+      });
+      toggle(noDialog.window, noDialog.document.getElementById('power-menu'), 'beforetoggle', 'open');
+      await click(noDialog.document, 'restart');
+      expect(power.restart).not.toHaveBeenCalled();
+
+      const show = vi.fn();
+      const failing = await loadTray({
+        globals: linuxAccounts({ showModal: async () => 'confirm', Notify: { show } }),
+      });
+      toggle(failing.window, failing.document.getElementById('power-menu'), 'beforetoggle', 'open');
+      await click(failing.document, 'poweroff'); // no power API on this system
+      expect(show).toHaveBeenCalledWith(expect.objectContaining({ title: 'Power off failed', type: 'error' }));
+    });
+
+    it('arrow keys, Home and End move focus between visible entries', async () => {
+      const { window, document } = await loadTray({ globals: linuxAccounts() });
+      const menu = document.getElementById('power-menu');
+      toggle(window, menu, 'beforetoggle', 'open');
+      item(document, 'logoff').focus();
+
+      const press = (key) => menu.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      press('ArrowDown');
+      expect(document.activeElement).toBe(item(document, 'restart'));
+      press('End');
+      expect(document.activeElement).toBe(item(document, 'poweroff'));
+      press('ArrowDown'); // wraps
+      expect(document.activeElement).toBe(item(document, 'logoff'));
+      press('ArrowUp'); // wraps back
+      expect(document.activeElement).toBe(item(document, 'poweroff'));
+    });
   });
 });

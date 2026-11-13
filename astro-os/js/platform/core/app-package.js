@@ -785,6 +785,46 @@ const AppPackage = (() => {
     ['id', 'name', 'version', 'entry'].forEach(f => {
       if (!manifest[f]) errors.push(`Missing required field: ${f}`);
     });
+
+    // SECURITY (2026-11-12 audit, finding F7/L3): entry/guestEntry and
+    // package file keys are package-controlled strings. Resolution is
+    // object-key/Map-based, so traversal cannot reach the host filesystem
+    // today — but this shape gate makes that invariant explicit at
+    // validation time instead of holding by accident, and covers paths
+    // (like nova:app:install) that historically skipped validation.
+    const SAFE_PACKAGE_PATH_RE = /^[\w@.\/-][\w@. \/-]{0,255}$/;
+    const FORBIDDEN_PATH_CHARS = /[\u0000-\u001f\u007f\\:]/;
+    const isUnsafePackagePath = (value) => {
+      if (typeof value !== 'string' || value.length === 0) return false;
+      if (FORBIDDEN_PATH_CHARS.test(value)) return true;
+      if (value.startsWith('/')) return true;
+      const segments = value.split('/');
+      return segments.some(seg => seg === '.' || seg === '..' || seg === '');
+    };
+    const checkPackagePath = (value, label) => {
+      if (typeof value !== 'string' || value.length === 0) return; // presence handled above
+      if (isUnsafePackagePath(value) || !SAFE_PACKAGE_PATH_RE.test(value)) {
+        errors.push(`Invalid ${label} "${value}": no absolute paths, traversal, backslashes, ':' or control characters`);
+      }
+    };
+    if (manifest.entry) checkPackagePath(manifest.entry, 'entry');
+    if (manifest.guestEntry) checkPackagePath(manifest.guestEntry, 'guestEntry');
+    if (manifest.icon && typeof manifest.icon === 'string' && !String(manifest.icon).startsWith('data:')) {
+      // Non-data icons are rendered via svgIcon()/img attributes in the
+      // privileged shell. Accept the shapes that render inertly: absolute
+      // /assets/... paths (svgIcon whitelists the charset), plain relative
+      // asset keys, and short non-ASCII (emoji) strings that svgIcon
+      // renders as escaped text. Anything else is a warning — svgIcon()'s
+      // escaping is the second line of defence, so this is defence in
+      // depth, not the only gate.
+      const iconValue = String(manifest.icon);
+      const iconIsSafe = /^\/assets\/[A-Za-z0-9._\/-]+$/.test(iconValue)
+        || SAFE_PACKAGE_PATH_RE.test(iconValue)
+        || (/[^\u0000-\u007F]/.test(iconValue) && iconValue.length <= 12);
+      if (!iconIsSafe) {
+        warnings.push('Icon is neither a data: URI, a plain asset path, nor an emoji; it will be rendered as escaped text');
+      }
+    }
     if (manifest.id && !manifest.id.startsWith('webapp_')) {
       if (!/^[a-z][a-z0-9]*(\.[a-z0-9]+)+$/.test(manifest.id))
         errors.push(`Invalid app ID "${manifest.id}". Must be reverse domain format.`);

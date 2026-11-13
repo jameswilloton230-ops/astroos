@@ -8,6 +8,12 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { resetTestStorage } from '../setup.js';
 import { loadWindowApp, initApp, settle } from '../helpers/app-harness.js';
+import nodeFs from 'node:fs';
+import fsPromises from 'node:fs/promises';
+import nodeHttp from 'node:http';
+import nodePath from 'node:path';
+import nodeHttps from 'node:https';
+import nodeCrypto from 'node:crypto';
 
 // The real host svgIcon (from js/core/utils/base-utils.js, loaded by the
 // harness) emits `src="/assets/icons8-<name>-94.png"` for PNG icons; the
@@ -98,6 +104,126 @@ describe('Browser app (js/apps/browser)', () => {
     expect(speedDial.textContent).toContain('Bookmark sites with ★ to see them here');
     const urlBar = content.querySelector('#browser-url-bar');
     expect(urlBar.placeholder).toBe('Search or enter URL…');
+  });
+
+  it('uses the captured request headers for ordinary downloads and saves data downloads', async () => {
+    const savedPaths = new Map();
+    const statuses = [];
+    const notifications = makeNotify();
+    const downloads = {
+      add: (name, url) => ({ id: name, name, url }),
+      setStatus: (...args) => statuses.push(args),
+    };
+    const serverRequests = [];
+    const server = nodeHttp.createServer((request, response) => {
+      serverRequests.push(request.headers);
+      if (request.headers.authorization !== 'download-header-test-value' ||
+          request.headers.referer !== 'https://example.test/page') {
+        response.writeHead(403);
+        response.end('forbidden');
+        return;
+      }
+      response.writeHead(206);
+      response.end('downloaded payload');
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+    const outputPrefix = `.browser-download-${nodeCrypto.randomUUID()}`;
+    const outputFor = (name) => nodePath.join(process.cwd(), 'tests', outputPrefix + '-' + name);
+    const httpFile = outputFor('http.bin');
+    const dataFile = outputFor('data.txt');
+    await Promise.all([fsPromises.rm(httpFile, { force: true }), fsPromises.rm(dataFile, { force: true })]);
+
+    try {
+      const { app, window } = await loadWindowApp('browser', {
+        stubs: browserStubs({
+          extra: {
+            Notify: notifications,
+            Downloads: downloads,
+            Buffer: { from: (...args) => Buffer.from(...args) },
+            require: (name) => ({
+              fs: nodeFs,
+              http: nodeHttp,
+              https: nodeHttps,
+              crypto: nodeCrypto,
+              path: nodePath,
+            })[name],
+            SystemDialogs: {
+              save: async ({ suggestedName }) => {
+                const filePath = suggestedName === 'data.txt' ? dataFile : httpFile;
+                savedPaths.set(suggestedName, filePath);
+                return { path: filePath, name: suggestedName };
+              },
+            },
+          },
+        }),
+      });
+      const content = initApp(app, { window });
+      const urlBar = content.querySelector('#browser-url-bar');
+      urlBar.value = 'https://example.test/page';
+      enter(window, urlBar);
+      const webview = content.querySelector('webview');
+      webview.executeScript = () => {};
+      webview.setZoomMode = () => {};
+
+      const listeners = {};
+      const addListener = (name) => ({ addListener: (callback) => { listeners[name] = callback; } });
+      webview.request = {
+        onBeforeRequest: addListener('beforeRequest'),
+        onBeforeSendHeaders: addListener('beforeSendHeaders'),
+        onHeadersReceived: addListener('headersReceived'),
+        onCompleted: addListener('completed'),
+        onErrorOccurred: addListener('error'),
+      };
+      webview.dispatchEvent(new window.Event('loadcommit'));
+
+      const url = `http://127.0.0.1:${server.address().port}/protected.bin`;
+      listeners.beforeSendHeaders({
+        url,
+        type: 'other',
+        requestHeaders: [
+          { name: 'Authorization', value: 'download-header-test-value' },
+          { name: 'Referer', value: 'https://example.test/page' },
+        ],
+      });
+      const request = { url, filename: 'protected.bin', deny() {}, allow() {} };
+      const permission = new window.Event('permissionrequest');
+      Object.defineProperties(permission, {
+        permission: { value: 'download' },
+        request: { value: request },
+      });
+      webview.dispatchEvent(permission);
+
+      for (let i = 0; i < 50 && !nodeFs.existsSync(httpFile); i++) await settle(20);
+      expect(await fsPromises.readFile(httpFile, 'utf8')).toBe('downloaded payload');
+      expect(serverRequests[0]).toMatchObject({
+        authorization: 'download-header-test-value',
+        referer: 'https://example.test/page',
+      });
+      expect(statuses).toContainEqual(['protected.bin', 'downloading']);
+      expect(statuses).toContainEqual(['protected.bin', 'done', 18]);
+
+      const dataPermission = new window.Event('permissionrequest');
+      Object.defineProperties(dataPermission, {
+        permission: { value: 'download' },
+        request: {
+          value: { url: 'data:text/plain;base64,SGVsbG8gZGF0YQ==', filename: 'data.txt', deny() {}, allow() {} },
+        },
+      });
+      webview.dispatchEvent(dataPermission);
+      for (let i = 0; i < 50 && !nodeFs.existsSync(dataFile); i++) await settle(20);
+      expect(savedPaths.has('data.txt')).toBe(true);
+      expect(notifications.calls.filter((item) => item.title === 'Download failed')).toEqual([]);
+      expect(await fsPromises.readFile(dataFile, 'utf8')).toBe('Hello data');
+      expect(savedPaths.has('protected.bin')).toBe(true);
+      expect(notifications.calls.some((item) => item.title === 'Download complete')).toBe(true);
+    } finally {
+      await Promise.all([
+        fsPromises.rm(httpFile, { force: true }),
+        fsPromises.rm(dataFile, { force: true }),
+      ]);
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 
   it('treats a plain query as a search and loads it into the tab webview', async () => {

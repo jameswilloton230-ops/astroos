@@ -2,7 +2,7 @@
 set -euo pipefail
 
 OS_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-BUILDROOT_VERSION="2025.02"
+BUILDROOT_VERSION="2026.08.1"
 BUILDROOT_DIR="$OS_DIR/.buildroot/buildroot-$BUILDROOT_VERSION"
 DOWNLOAD_DIR="$OS_DIR/.downloads"
 ARCHIVE="$DOWNLOAD_DIR/buildroot-$BUILDROOT_VERSION.tar.xz"
@@ -37,23 +37,14 @@ if [[ ! -d "$BUILDROOT_DIR" ]]; then
   tar -xJf "$ARCHIVE" --strip-components=1 -C "$BUILDROOT_DIR"
 fi
 
-# Buildroot 2025.02 ships Xwayland 23.2.4, whose glamor GBM backend refuses to
-# start unless the compositor offers wl_drm. wlroots 0.18 (cage) does not, so
-# glamor, GLX and Chromium's GPU process all fail. These are Buildroot's own
-# 2025.05 package files (Xwayland 24.1.6); copy them in on every run because the
-# extracted Buildroot tree is cached.
-XWAYLAND_OVERRIDE_DIR="$OS_DIR/overrides/xwayland"
-cp "$XWAYLAND_OVERRIDE_DIR/xwayland.mk" "$XWAYLAND_OVERRIDE_DIR/xwayland.hash" \
-  "$BUILDROOT_DIR/package/x11r7/xwayland/"
+# Buildroot 2026.08 ships wlroots 0.20.0, but labwc 0.20.3 requires wlroots
+# >= 0.20.1. Copy in Buildroot master's wlroots recipe (0.20.2) on every run
+# because the extracted Buildroot tree is cached.
+WLROOTS_OVERRIDE_DIR="$OS_DIR/overrides/wlroots"
+cp "$WLROOTS_OVERRIDE_DIR/wlroots.mk" "$WLROOTS_OVERRIDE_DIR/wlroots.hash" \
+  "$BUILDROOT_DIR/package/wlroots/"
 
-# host-m4 1.4.19's gnulib uses _GL_ATTRIBUTE_NODISCARD in a position that
-# GCC 13+ (ubuntu-latest) rejects. The override bumps host-m4 to 1.4.21, which
-# has the fixed gnulib. Old patches are dropped since they target 1.4.19.
-HOST_M4_OVERRIDE_DIR="$OS_DIR/overrides/host-m4"
-rm -f "$BUILDROOT_DIR"/package/m4/*.patch
-cp "$HOST_M4_OVERRIDE_DIR/m4.mk" "$HOST_M4_OVERRIDE_DIR/m4.hash" "$BUILDROOT_DIR/package/m4/"
-
-# Buildroot 2025.02 ships open-vm-tools 11.3.5 built --without-x, which drops the
+# Buildroot 2026.08 ships open-vm-tools 11.3.5 built --without-x, which drops the
 # drag and drop and clipboard plugins, and whose configure needs libfuse2 for
 # vmhgfs-fuse (this image only has libfuse3). The override is the 13.1.0 recipe
 # from Buildroot master plus a DESKTOP option. Its patches replace the old
@@ -80,6 +71,7 @@ fi
 make -C "$BUILDROOT_DIR" O="$OUTPUT_DIR" BR2_EXTERNAL="$OS_DIR" astroos_x86_64_defconfig
 for option in \
   BR2_TOOLCHAIN_BUILDROOT \
+  BR2_PACKAGE_HOST_LINUX_HEADERS_CUSTOM_7_1 \
   BR2_TOOLCHAIN_BUILDROOT_GLIBC \
   BR2_TOOLCHAIN_BUILDROOT_CXX \
   BR2_INSTALL_LIBSTDCPP \
@@ -111,7 +103,7 @@ for option in \
   BR2_PACKAGE_XORGPROTO \
   BR2_PACKAGE_LIBGLVND \
   BR2_PACKAGE_LIBEPOXY \
-  BR2_PACKAGE_CAGE \
+  BR2_PACKAGE_LABWC \
   BR2_PACKAGE_WLROOTS_XWAYLAND \
   BR2_PACKAGE_XWAYLAND \
   BR2_PACKAGE_SEATD_DAEMON \
@@ -188,10 +180,11 @@ fi
 GRAPHICS_SIGNATURE_FILE="$OUTPUT_DIR/.astroos-graphics-signature"
 GRAPHICS_SIGNATURE="$(
   {
-    printf '%s\n' 'astroos-graphics-stack-v4'
-    cat "$XWAYLAND_OVERRIDE_DIR/xwayland.mk" "$XWAYLAND_OVERRIDE_DIR/xwayland.hash"
+    printf '%s\n' 'astroos-graphics-stack-v5'
+    cat "$WLROOTS_OVERRIDE_DIR/wlroots.mk" "$WLROOTS_OVERRIDE_DIR/wlroots.hash" \
+      "$OS_DIR/patches/wlroots/0001-dmabuf-tolerate-close-handle-failure.patch"
     # mesa3d-demos only adds debug tools; it must not force a Mesa/XWayland rebuild.
-    grep -E '^BR2_PACKAGE_(CAGE|WLROOTS_XWAYLAND|XWAYLAND|XORGPROTO|LIBDRM|LIBGLVND|LIBEPOXY|MESA3D)(_|=)' "$OUTPUT_DIR/.config" \
+    grep -E '^BR2_PACKAGE_(LABWC|WLROOTS_XWAYLAND|XWAYLAND|XORGPROTO|LIBDRM|LIBGLVND|LIBEPOXY|MESA3D)(_|=)' "$OUTPUT_DIR/.config" \
       | grep -v '^BR2_PACKAGE_MESA3D_DEMOS='
   } | sha256sum | cut -d ' ' -f 1
 )"
@@ -258,7 +251,7 @@ fi
 
 make -C "$BUILDROOT_DIR" O="$OUTPUT_DIR" BR2_EXTERNAL="$OS_DIR" \
   alsa-utils-dirclean astroos-kiosk-dirclean astroos-install-dirclean astroos-power-dirclean \
-  wlroots-dirclean cage-dirclean
+  wlroots-dirclean labwc-dirclean
 make -C "$BUILDROOT_DIR" O="$OUTPUT_DIR" BR2_EXTERNAL="$OS_DIR" toolchain
 make -C "$BUILDROOT_DIR" O="$OUTPUT_DIR" BR2_EXTERNAL="$OS_DIR" mesa3d-extract
 MESA3D_VERSION="$(sed -n 's/^MESA3D_VERSION = //p' "$BUILDROOT_DIR/package/mesa3d/mesa3d.mk")"
@@ -353,8 +346,12 @@ do
   fi
 done
 
-if [[ ! -x "$OUTPUT_DIR/target/usr/bin/cage" ]]; then
-  echo "Cage compositor is missing from the target image." >&2
+if [[ ! -x "$OUTPUT_DIR/target/usr/bin/labwc" ]]; then
+  echo "labwc compositor is missing from the target image." >&2
+  exit 1
+fi
+if [[ ! -f "$OUTPUT_DIR/target/etc/labwc/rc.xml" ]]; then
+  echo "labwc kiosk configuration is missing from the target image." >&2
   exit 1
 fi
 if [[ ! -x "$OUTPUT_DIR/target/usr/bin/Xwayland" ]]; then
@@ -444,8 +441,12 @@ if missing:
         + ", ".join(missing)
     )
 PY
-if ! find "$OUTPUT_DIR/target/usr/lib" -type f -name 'vmwgfx_dri.so' -print -quit | grep -q .; then
+# Mesa 24.2+ installs the per-driver *_dri.so names as symlinks to libdril_dri.so,
+# so -type f alone misses them.
+if ! find "$OUTPUT_DIR/target/usr/lib" \( -type f -o -type l \) -name 'vmwgfx_dri.so' -print -quit | grep -q .; then
   echo "Mesa's VMware SVGA DRI driver is missing from the target image." >&2
+  echo "What Mesa actually installed (for debugging):" >&2
+  find "$OUTPUT_DIR/target/usr/lib" \( -name '*_dri.so' -o -name 'libdril*' -o -name 'libgallium*' \) -ls >&2 || true
   exit 1
 fi
 if ! find "$OUTPUT_DIR/target/usr/lib" \( -type f -o -type l \) -name 'libGLX_mesa.so*' -print -quit | grep -q .; then

@@ -27,6 +27,109 @@ const FS = {
     }
   },
 
+  /**
+   * Multi-user: re-root the service onto one account's tree.
+   * SessionManager-only surface — the FS service never discovers the
+   * active account on its own. Single-user machines (multi-user mode
+   * off) keep the byte-identical 3.0.2 behaviour: this is a no-op.
+   */
+  async setUserRoot(uid, options = {}) {
+    const scope = (typeof NovaUserScope !== 'undefined' && NovaUserScope) || null;
+    if (!scope || !scope.enabled()) return false;
+    if (options && options.guest) {
+      // Guest trees are volatile and unique per session — never reused, and
+      // previous sessions' rows are dead weight (their owner id can never
+      // be re-mounted), so wipe them before minting the fresh one.
+      try {
+        await OS.workers.fs.call('purgeGuestOwners');
+      } catch (err) {
+        console.warn('[FS] Guest tree cleanup failed:', err);
+      }
+      await OS.workers.fs.call('setOwner', 'guest_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+      await this.init();
+      this._hideSharedForGuest();
+    } else if (uid === null || uid === undefined || uid === '') {
+      // Explicit teardown (logout / user switch): back to the MACHINE tree —
+      // unscoped rows only. Previously a falsy uid fell back to the legacy
+      // owner uid, so after logout the FS cache kept serving the departed
+      // account's tree (and a guest desktop rode straight onto it) — the
+      // "filesystem shared as one" leak. Nothing personal is mounted while
+      // the picker is up; the next login re-roots onto the right account.
+      await OS.workers.fs.call('setOwner', null);
+      await this.init();
+    } else {
+      await OS.workers.fs.call('setOwner', String(uid));
+      await this.init();
+    }
+    return true;
+  },
+
+  /**
+   * Guests get no /Shared access (the native backend's jail-root rule): the
+   * worker already excludes '__shared__' rows from guest mounts, so drop the
+   * folder from this mount's cache too — createDefaultFS builds it before
+   * the owner id exists to know better.
+   */
+  _hideSharedForGuest() {
+    const sharedId = this.specialFolders.shared;
+    if (!sharedId) return;
+    const node = this.files.get(sharedId);
+    if (node) {
+      this._unindexFile(sharedId);
+      this.files.delete(sharedId);
+    }
+    delete this.specialFolders.shared;
+  },
+
+  /** Creator of a /Shared entry, for the write-own-entries-only rule. */
+  creatorOf(node) {
+    return node && node.creator ? node.creator : null;
+  },
+
+  /**
+   * Entries created under /Shared carry the '__shared__' owner (so every
+   * account's mount sees them) and a creator stamp (so only the creator
+   * account — or an admin — may modify or delete them).
+   */
+  _stampSharedEntry(node, parentId) {
+    const scope = (typeof NovaUserScope !== 'undefined' && NovaUserScope) || null;
+    if (!scope || !scope.enabled() || !node) return node;
+    const parent = this.files.get(parentId);
+    const parentIsShared = parentId === this.specialFolders.shared ||
+      (parent && (parent.ownerUid === '__shared__' || parentId === parent.id && parent.name === 'Shared' && parent.parentId === this.rootId));
+    if (!parentIsShared) return node;
+    // Guests never write into the cross-account drop box: without this a
+    // guest-created entry would ride the '__shared__' owner into every
+    // account's tree (the native backend already excludes /Shared from a
+    // guest's jail roots — setUserRoot hides the folder from guest mounts).
+    if (scope.uid() === 'guest') {
+      throw new Error('Guest sessions cannot write to the shared drop box');
+    }
+    node.ownerUid = '__shared__';
+    node.creator = scope.uid() || '__anonymous__';
+    return node;
+  },
+
+  /**
+   * /Shared rule: every account reads it; each account writes and
+   * deletes only its own entries; admins administer it outright. Files
+   * land there through an explicit share action, not ambient access.
+   */
+  assertSharedWriteAllowed(node) {
+    if (!node) return;
+    const scope = (typeof NovaUserScope !== 'undefined' && NovaUserScope) || null;
+    if (!scope || !scope.enabled()) return;
+    if (scope.uid() === 'guest') {
+      throw new Error('Guest sessions cannot write to the shared drop box');
+    }
+    const isSharedEntry = node.ownerUid === '__shared__';
+    if (!isSharedEntry) return;
+    const creator = this.creatorOf(node);
+    if (creator === null || creator === '__system__') return; // folder itself
+    if (creator === scope.uid() || scope.isActiveAdmin()) return;
+    throw new Error('This /Shared entry belongs to another account');
+  },
+
   async init() {
     try {
       const files = await OS.workers.fs.call('getAllFiles');
@@ -39,6 +142,7 @@ const FS = {
           this._indexFile(f);
         }
         this.findSpecialFolders();
+        this._ensureSharedFolder();
       } else {
         await this.createDefaultFS();
       }
@@ -50,6 +154,31 @@ const FS = {
       }
       await this.createDefaultFS();
     }
+  },
+
+  /**
+   * Self-heal for trees created before /Shared was persisted (createDefaultFS
+   * used to build the node and then drop it from allFiles): on a multi-user
+   * machine whose mounted tree has no Shared root child, create + persist
+   * it now. Single-user machines (scope disabled) keep the exact 3.0.2 tree.
+   */
+  async _ensureSharedFolder() {
+    const scope = (typeof NovaUserScope !== 'undefined' && NovaUserScope) || null;
+    if (!scope || !scope.enabled()) return;
+    if (this.rootId === null || this.specialFolders.shared) return;
+    const now = Date.now();
+    const shared = {
+      id: generateId(), name: 'Shared', type: 'folder', parentId: this.rootId,
+      content: null, blobKey: null, size: 0, mimeType: 'inode/directory',
+      created: now, modified: now, accessed: now,
+      permissions: { read: true, write: true, execute: true },
+      tags: [], sha256: null, icon: null,
+      ownerUid: '__shared__', creator: '__system__',
+    };
+    this.files.set(shared.id, shared);
+    this._indexFile(shared);
+    this.specialFolders.shared = shared.id;
+    await OS.workers.fs.call('putFiles', [shared]);
   },
 
   findSpecialFolders() {
@@ -73,6 +202,7 @@ const FS = {
           case 'pictures': this.specialFolders.pictures = f.id; break;
           case 'videos': this.specialFolders.videos = f.id; break;
           case 'trash': this.specialFolders.trash = f.id; break;
+          case 'shared': this.specialFolders.shared = f.id; break;
         }
       }
     }
@@ -101,8 +231,17 @@ const FS = {
     const videos = mkNode('Videos', 'folder', root.id);
     const trash = mkNode('Trash', 'folder', root.id);
     const screenshots = mkNode('Screenshots', 'folder', pictures.id);
+    // The cross-account drop box rides the owner-scoped store under the
+    // '__shared__' pseudo-owner: visible to every account, ownership-
+    // tracked by the FS service layer (see assertSharedWriteAllowed).
+    // PERSISTED here too — the node used to be built and then dropped from
+    // allFiles, so no account's tree ever contained a /Shared folder and
+    // the feature was unreachable on the virtual backend.
+    const shared = mkNode('Shared', 'folder', root.id);
+    shared.ownerUid = '__shared__';
+    shared.creator = '__system__';
 
-    const allFiles = [root, desktop, documents, downloads, music, pictures, videos, trash, screenshots];
+    const allFiles = [root, desktop, documents, downloads, music, pictures, videos, trash, screenshots, shared];
 
     this.files.clear();
     this._childrenByParent.clear();
@@ -114,7 +253,8 @@ const FS = {
 
     this.specialFolders = {
       desktop: desktop.id, documents: documents.id, downloads: downloads.id,
-      music: music.id, pictures: pictures.id, videos: videos.id, trash: trash.id
+      music: music.id, pictures: pictures.id, videos: videos.id, trash: trash.id,
+      shared: shared.id
     };
 
     await OS.workers.fs.call('putFiles', allFiles);
@@ -209,6 +349,7 @@ const FS = {
       permissions: { read: true, write: true, execute: false },
       tags: [], sha256: null, icon: null
     };
+    this._stampSharedEntry(node, parentId);
     this.files.set(node.id, node);
     this._indexFile(node);
     await OS.workers.fs.call('putFiles', [node]);
@@ -229,6 +370,7 @@ const FS = {
       permissions: { read: true, write: true, execute: true },
       tags: [], sha256: null, icon: null
     };
+    this._stampSharedEntry(node, parentId);
     this.files.set(node.id, node);
     this._indexFile(node);
     await OS.workers.fs.call('putFiles', [node]);
@@ -242,6 +384,7 @@ const FS = {
   async writeFile(id, content, mimeType) {
     const node = this.files.get(id);
     if (!node) return null;
+    this.assertSharedWriteAllowed(node);
     node.content = content;
     if (typeof mimeType === 'string' && mimeType) node.mimeType = mimeType;
     node.size = new Blob([content]).size;
@@ -259,6 +402,7 @@ const FS = {
   async rename(id, newName) {
     const node = this.files.get(id);
     if (!node) return null;
+    this.assertSharedWriteAllowed(node);
     const oldName = node.name;
     if (oldName === newName) return node;
     const siblings = this.listDir(node.parentId);
@@ -281,6 +425,7 @@ const FS = {
   async move(id, newParentId) {
     const node = this.files.get(id);
     if (!node) return null;
+    this.assertSharedWriteAllowed(node);
     this._unindexFile(id);
     node.parentId = newParentId;
     node.modified = Date.now();
@@ -344,6 +489,7 @@ const FS = {
   async deleteToTrash(id) {
     const node = this.files.get(id);
     if (!node) return;
+    this.assertSharedWriteAllowed(node);
     this._unindexFile(id);
     node._originalParent = node.parentId;
     node.parentId = this.specialFolders.trash;
@@ -359,6 +505,7 @@ const FS = {
   async permanentDelete(id) {
     const node = this.files.get(id);
     if (!node) return;
+    this.assertSharedWriteAllowed(node);
     if (node.type === 'folder') {
       const parentMap = this._childrenByParent.get(id);
       if (parentMap) {
@@ -427,32 +574,98 @@ if (typeof process !== 'undefined' && process.platform === 'linux') {
   const nativeFs = require('fs');
   const nativePath = require('path');
   const nativeOs = require('os');
-  const home = nativePath.resolve(nativeOs.homedir());
-  const homePrefix = home.endsWith(nativePath.sep) ? home : home + nativePath.sep;
-  const trashPath = nativePath.join(home, '.local', 'share', 'Trash', 'files');
-  // The per-app data root — the same tree AppDirs bootstraps as
-  // ~/.local/share/novabyte/data/<appId>/{files,cache,databases,shared_prefs}.
-  // The VFS exposes it as /data so sandboxed apps' appdata:/ and /data/
-  // paths land in the documented AstroOS data root instead of a stray
-  // ~/data folder alongside the home directories.
-  const appDataRoot = nativePath.join(home, '.local', 'share', 'novabyte', 'data');
-  const oldVfsMigrated = nativePath.join(home, '.local', 'share', 'novabyte', 'migration', 'vfs-imported');
+  // ── Per-user scoping (multi-user mode) ─────────────────────────────
+  // Default roots match 3.0.2 byte-for-byte: single-user machines (and
+  // any pre-login phase) keep exactly today's layout, because
+  // setUserRoot() is only ever called by the SessionManager, and only
+  // after a successful account login. When it IS called, the active
+  // account's filesystem IS <machine home>/users/<username>/ — a real,
+  // separately-rooted tree beside the other accounts (users/sam/,
+  // users/ada/…), not a "home inside the machine home" buried under
+  // ~/.local/share. Its Trash and per-app data (.apps) live inside it,
+  // and the machine-wide /Shared drop box joins the jail as a second
+  // legal root.
+  const machineHome = nativePath.resolve(nativeOs.homedir());
+  const usersRoot = nativePath.join(machineHome, 'users');
+  const sharedRoot = nativePath.join(machineHome, '.local', 'share', 'novabyte', 'shared');
+  const defaultTrashPath = nativePath.join(machineHome, '.local', 'share', 'Trash', 'files');
+  const defaultAppDataRoot = nativePath.join(machineHome, '.local', 'share', 'novabyte', 'data');
+  let home = machineHome;
+  let homePrefix = home.endsWith(nativePath.sep) ? home : home + nativePath.sep;
+  let trashPath = defaultTrashPath;
+  let appDataRoot = defaultAppDataRoot;
+  let allowedRoots = [home];
+  let scopedUser = '';
+  let guestRoots = false;
 
-  const assertHomePath = path => {
+  /* The on-disk segment for an account: the USERNAME (users/sam/),
+   * matching what a person sees when they open /home/<linux-user>/users.
+   * Usernames are immutable in the account database, so the segment is
+   * stable; accounts created under earlier layouts (users/<uid>, or the
+   * nested users/<name>/home tree) are renamed/lifted onto this layout by
+   * the SessionManager's login-time upgrade before any root is applied. */
+  const safeUsername = (uname) =>
+    /^[a-z0-9][a-z0-9._-]{2,31}$/.test(String(uname || '').toLowerCase())
+      ? String(uname || '').toLowerCase() : '';
+
+  /* Per-account roots. Accounts live at ~/users/<username>/ with the
+   * standard folders directly inside it. Guest sessions are volatile and
+   * never real accounts, so they stay under the hidden machine state tree
+   * (~/.local/share/novabyte/guest/<g-id>) where they never pollute users/. */
+  const userRootsFor = (segment, guest) => {
+    const base = guest
+      ? nativePath.join(machineHome, '.local', 'share', 'novabyte', 'guest', `g-${Date.now().toString(36)}`)
+      : nativePath.join(usersRoot, safeUsername(segment) || String(segment || ''));
+    return { home: base, apps: nativePath.join(base, '.apps') };
+  };
+
+  const applyRoots = (newHome, uid, { scoped = false, guest = false } = {}) => {
+    home = nativePath.resolve(newHome);
+    homePrefix = home.endsWith(nativePath.sep) ? home : home + nativePath.sep;
+    scopedUser = scoped ? String(uid) : '';
+    guestRoots = guest;
+    if (scoped || guest) {
+      // The account tree owns its Trash and its app data directly: both
+      // are first-class children of ~/users/<name>/ (.apps is dot-hidden
+      // from listings, exactly like ~/.local on a real Linux home).
+      trashPath = nativePath.join(home, 'Trash');
+      appDataRoot = nativePath.join(home, '.apps');
+      allowedRoots = scoped ? [home, appDataRoot, sharedRoot] : [home, appDataRoot]; // guests get no /Shared access
+    } else {
+      trashPath = defaultTrashPath;
+      appDataRoot = defaultAppDataRoot;
+      allowedRoots = [home];
+    }
+  };
+  // The per-app data root — ~/users/<name>/.apps on multi-user machines
+  // (the tree AppDirs bootstraps as .apps/<appId>/…), or the legacy
+  // ~/.local/share/novabyte/data/<appId>/… on single-user machines.
+  // The VFS exposes it as /data so sandboxed apps' appdata:/ and /data/
+  // paths land in the account's own tree, hidden from listings.
+  const oldVfsMigrated = nativePath.join(machineHome, '.local', 'share', 'novabyte', 'migration', 'vfs-imported');
+
+  const assertUserPath = path => {
     const resolved = nativePath.resolve(path);
-    if (resolved !== home && !resolved.startsWith(homePrefix)) {
+    const insideRoot = (root, target) =>
+      target === root || target.startsWith(root.endsWith(nativePath.sep) ? root : root + nativePath.sep);
+    if (!allowedRoots.some(root => insideRoot(root, resolved))) {
       throw new Error(`Filesystem operation is outside the user home directory: ${resolved}`);
     }
     let existingPath = resolved;
-    while (!nativeFs.existsSync(existingPath) && existingPath !== home) {
+    while (!nativeFs.existsSync(existingPath) &&
+           !allowedRoots.some(root => existingPath === nativePath.dirname(root))) {
       existingPath = nativePath.dirname(existingPath);
     }
     const realPath = nativeFs.realpathSync(existingPath);
-    if (realPath !== home && !realPath.startsWith(homePrefix)) {
+    const realRoots = allowedRoots.map(root => {
+      try { return nativeFs.existsSync(root) ? nativeFs.realpathSync(root) : root; } catch (_) { return root; }
+    });
+    if (!realRoots.some(root => insideRoot(root, realPath))) {
       throw new Error(`Filesystem operation traverses a path outside the user home directory: ${resolved}`);
     }
     return resolved;
   };
+  const assertHomePath = assertUserPath;
   const mimeForPath = path => {
     const extension = nativePath.extname(path).toLowerCase();
     const mimeTypes = {
@@ -539,7 +752,11 @@ if (typeof process !== 'undefined' && process.platform === 'linux') {
     const folder = assertHomePath(folderId);
     try {
       const entries = nativeFs.readdirSync(folder, { withFileTypes: true })
-        .filter(entry => !entry.isSymbolicLink())
+        // Dot entries are machine plumbing (.apps, .browser-state.json):
+        // hidden from every listing exactly like a real OS file manager,
+        // and consistent with the virtual backend whose tree only ever
+        // contains the folders the user (or the OS shell) created.
+        .filter(entry => !entry.isSymbolicLink() && !entry.name.startsWith('.'))
         .map(entry => nodeForPath(nativePath.join(folder, entry.name)))
         .sort((a, b) => a.type !== b.type
           ? (a.type === 'folder' ? -1 : 1)
@@ -645,10 +862,23 @@ if (typeof process !== 'undefined' && process.platform === 'linux') {
   Object.assign(FS, {
     async init() {
       nativeFs.mkdirSync(home, { recursive: true });
-      for (const folder of ['Desktop', 'Documents', 'Downloads', 'Music', 'Pictures', 'Videos', trashPath]) {
-        createFolderAt(nativePath.isAbsolute(folder) ? folder : nativePath.join(home, folder));
+      // On a multi-user machine the machine home is the SYSTEM area — the
+      // ~/users/<username>/ account trees plus hidden dot-state — never a
+      // user's home. Boot (picker phase) must NOT create the standard user
+      // folders or the machine Trash at its root: they belong inside each
+      // account's tree, and the login-time sweep
+      // (MultiUserMigration.upgradeUserLayout) adopts any legacy leftovers
+      // into the signing-in account. Single-user machines (multi-user off)
+      // keep the exact 3.0.2 layout: the machine home IS the user home with
+      // the standard folders directly inside it.
+      const mountedScope = (typeof NovaUserScope !== 'undefined' && NovaUserScope) || null;
+      const machinePhase = !!(mountedScope && mountedScope.enabled && mountedScope.enabled() && !scopedUser && !guestRoots);
+      if (!machinePhase) {
+        for (const folder of ['Desktop', 'Documents', 'Downloads', 'Music', 'Pictures', 'Videos', trashPath]) {
+          createFolderAt(nativePath.isAbsolute(folder) ? folder : nativePath.join(home, folder));
+        }
+        createFolderAt(nativePath.join(home, 'Pictures', 'Screenshots'));
       }
-      createFolderAt(nativePath.join(home, 'Pictures', 'Screenshots'));
       nativeFs.mkdirSync(appDataRoot, { recursive: true });
       this.rootId = home;
       this.files = new Map();
@@ -663,8 +893,19 @@ if (typeof process !== 'undefined' && process.platform === 'linux') {
         trash: trashPath,
         data: appDataRoot,
       };
+      const scope = (typeof NovaUserScope !== 'undefined' && NovaUserScope) || null;
+      if (scope && scope.enabled() && allowedRoots.includes(sharedRoot)) {
+        // The cross-account drop box: visible to every account, owned by
+        // the system, administered by admins, written per-account.
+        createFolderAt(sharedRoot);
+        this.specialFolders.shared = sharedRoot;
+      }
       nodeForPath(home);
-      for (const folder of Object.values(this.specialFolders)) nodeForPath(folder);
+      // Machine-phase special folders may not exist on disk (nothing
+      // created them); only index the ones that are really there.
+      for (const folder of Object.values(this.specialFolders)) {
+        if (nativeFs.existsSync(folder)) nodeForPath(folder);
+      }
       await migrateLegacyVfs();
       refreshVisibleTree();
       console.info(`[LinuxFS] Using the native filesystem under ${home}`);
@@ -692,6 +933,7 @@ if (typeof process !== 'undefined' && process.platform === 'linux') {
       let resolved;
       if (path === '/') resolved = home;
       else if (path === '/data' || path.startsWith('/data/')) resolved = nativePath.join(appDataRoot, path.slice('/data/'.length));
+      else if (path === '/Shared' || path.startsWith('/Shared/')) resolved = nativePath.join(sharedRoot, path.slice('/Shared/'.length));
       else if (path.startsWith('/')) resolved = nativePath.join(home, path.slice(1));
       else resolved = nativePath.resolve(home, path);
       try {
@@ -701,21 +943,88 @@ if (typeof process !== 'undefined' && process.platform === 'linux') {
         throw error;
       }
     },
+    async setUserRoot(uid, options = {}) {
+      const scope = (typeof NovaUserScope !== 'undefined' && NovaUserScope) || null;
+      if (!scope || !scope.enabled()) return false;
+      const guest = !!(options && options.guest);
+      // Prefer the explicit username from the SessionManager; fall back to
+      // the scope module (set at mount), then the uid (legacy layout).
+      const username = safeUsername(options && options.username) ||
+        (typeof scope.activeUsername === 'function' ? scope.activeUsername() : '') ||
+        String(uid || '');
+      if (guest) {
+        applyRoots(userRootsFor('', true).home, '', { guest: true });
+      } else if (uid) {
+        applyRoots(userRootsFor(username, false).home, username, { scoped: true });
+      } else {
+        // No account mounted (picker phase): back to the machine roots.
+        applyRoots(machineHome, '', {});
+      }
+      await this.init();
+      return true;
+    },
+
+    /** Creator bookkeeping for /Shared entries (sidecar index). */
+    _sharedIndex() {
+      try {
+        const raw = nativeFs.readFileSync(nativePath.join(sharedRoot, '.nova-owners.json'), 'utf8');
+        const doc = JSON.parse(raw);
+        return doc && typeof doc === 'object' && doc.entries ? doc.entries : {};
+      } catch (_) { return {}; }
+    },
+    _sharedIndexWrite(entries) {
+      try {
+        nativeFs.mkdirSync(sharedRoot, { recursive: true });
+        const tmp = nativePath.join(sharedRoot, `.nova-owners.json.${process.pid}.tmp`);
+        nativeFs.writeFileSync(tmp, JSON.stringify({ version: 1, entries }), { mode: 0o600 });
+        nativeFs.renameSync(tmp, nativePath.join(sharedRoot, '.nova-owners.json'));
+      } catch (_) { /* best-effort bookkeeping */ }
+    },
+    _sharedRelative(resolved) {
+      if (resolved === sharedRoot || !resolved.startsWith(sharedRoot + nativePath.sep)) return null;
+      return resolved.slice(sharedRoot.length + 1);
+    },
+    _noteSharedCreator(resolved) {
+      const scope = (typeof NovaUserScope !== 'undefined' && NovaUserScope) || null;
+      const rel = this._sharedRelative(resolved);
+      if (rel === null || !scope || !scope.enabled()) return;
+      const entries = this._sharedIndex();
+      entries[rel] = scope.uid() || '__anonymous__';
+      this._sharedIndexWrite(entries);
+    },
+    /** /Shared rule: write/delete only your own entries; admins all. */
+    assertSharedWriteAllowed(resolved) {
+      const rel = this._sharedRelative(resolved);
+      if (rel === null) return;
+      const scope = (typeof NovaUserScope !== 'undefined' && NovaUserScope) || null;
+      if (!scope || !scope.enabled()) return;
+      if (scope.isActiveAdmin()) return;
+      const entries = this._sharedIndex();
+      const creator = entries[rel];
+      if (creator === undefined) return; // pre-scoping entry: writable by admins only? keep permissive for compat
+      if (creator === scope.uid()) return;
+      throw new Error(`This /Shared entry belongs to another account: ${rel}`);
+    },
+
     async createFile(parentId, name, content, mimeType) {
       const path = safeChild(parentId, name);
       nativeFs.writeFileSync(path, await fileContent(content), { flag: 'wx', mode: 0o600 });
+      this._noteSharedCreator(path);
       const node = nodeForPath(path);
       if (mimeType) node.mimeType = mimeType;
       OS.events.emit('fs:created', node);
       return node;
     },
     async createFolder(parentId, name) {
-      const node = createFolderAt(safeChild(parentId, name));
+      const path = safeChild(parentId, name);
+      const node = createFolderAt(path);
+      this._noteSharedCreator(path);
       OS.events.emit('fs:created', node);
       return node;
     },
     async writeFile(id, content, mimeType) {
       const path = assertHomePath(id);
+      this.assertSharedWriteAllowed(path);
       const previous = nodeForPath(path);
       if (previous.type !== 'file') throw new Error(`Not a regular file: ${path}`);
       nativeFs.writeFileSync(path, await fileContent(content), { mode: 0o600 });
@@ -726,6 +1035,7 @@ if (typeof process !== 'undefined' && process.platform === 'linux') {
     },
     async rename(id, newName) {
       const source = assertHomePath(id);
+      this.assertSharedWriteAllowed(source);
       const destination = safeChild(nativePath.dirname(source), newName);
       if (nativeFs.existsSync(destination)) {
         const error = new Error(`A file or folder named "${newName}" already exists in this location.`);
@@ -740,6 +1050,7 @@ if (typeof process !== 'undefined' && process.platform === 'linux') {
     },
     async move(id, newParentId, nameOverride) {
       const source = assertHomePath(id);
+      this.assertSharedWriteAllowed(source);
       const destination = safeChild(newParentId, nameOverride || nativePath.basename(source));
       if (destination === source) {
         // Cut-pasted into the folder it already sits in, with the same name:
@@ -758,6 +1069,7 @@ if (typeof process !== 'undefined' && process.platform === 'linux') {
         nativeFs.cpSync(source, destination, { recursive: true, errorOnExist: true });
         nativeFs.rmSync(source, { recursive: true });
       }
+      this._noteSharedCreator(destination);
       refreshVisibleTree();
       const node = nodeForPath(destination);
       OS.events.emit('fs:moved', node);
@@ -785,6 +1097,7 @@ if (typeof process !== 'undefined' && process.platform === 'linux') {
     },
     async deleteToTrash(id) {
       const source = assertHomePath(id);
+      this.assertSharedWriteAllowed(source);
       const uniqueDestination = this.uniqueName(trashPath, nativePath.basename(source));
       const finalPath = safeChild(trashPath, uniqueDestination);
       nativeFs.renameSync(source, finalPath);
@@ -795,7 +1108,9 @@ if (typeof process !== 'undefined' && process.platform === 'linux') {
     },
     async permanentDelete(id) {
       const path = assertHomePath(id);
+      this.assertSharedWriteAllowed(path);
       if (path === home) throw new Error('Refusing to delete the user home directory');
+      if (allowedRoots.includes(path)) throw new Error('Refusing to delete a storage root directory');
       nativeFs.rmSync(path, { recursive: true, force: false });
       refreshVisibleTree();
       OS.events.emit('fs:deleted', { id: path });
@@ -828,6 +1143,7 @@ if (typeof process !== 'undefined' && process.platform === 'linux') {
         }
       };
       visit(home);
+      if (allowedRoots.includes(sharedRoot)) visit(sharedRoot);
       return results;
     },
     async exportNodes() {

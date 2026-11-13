@@ -10,7 +10,6 @@
  *   // { path, name, content, mimeType, size }
  *   const file = await SystemDialogs.open({
  *     title: 'Open File',
- *     startPath: '/home/astroos/Downloads',
  *     filter: (name, isDir) => isDir || name.endsWith('.txt'),
  *   });
  *
@@ -24,7 +23,6 @@
  *   const dest = await SystemDialogs.save({
  *     title: 'Save As',
  *     suggestedName: 'untitled.txt',
- *     startPath: '/home/astroos/Downloads',
  *   });
  */
 const SystemDialogs = (() => {
@@ -35,6 +33,18 @@ const SystemDialogs = (() => {
   const os   = require('os');
 
   const DEFAULT_START = os.homedir() || '/home/astroos';
+
+  function getDefaultStartPath() {
+    try {
+      if (typeof FS !== 'undefined' && FS.rootId && typeof FS.getPath === 'function') {
+        const userRoot = FS.getPath(FS.rootId);
+        if (typeof userRoot === 'string' && path.isAbsolute(userRoot)) return userRoot;
+      }
+    } catch (error) {
+      console.warn('[SystemDialogs] Could not resolve the mounted account root:', error);
+    }
+    return DEFAULT_START;
+  }
 
   // ── Mime guessing (enough for common types) ────────────────────────────
   const EXT_MIME = {
@@ -173,7 +183,7 @@ const SystemDialogs = (() => {
     const acceptRule   = acceptFilter(opts.accept);
     const filter    = (name, isDir) =>
       (!customFilter || customFilter(name, isDir)) && (!acceptRule || acceptRule(name, isDir));
-    let   cwd       = opts.startPath || DEFAULT_START;
+    let   cwd       = opts.startPath || getDefaultStartPath();
 
     return new Promise((resolve) => {
       let settled = false;

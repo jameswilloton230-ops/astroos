@@ -171,27 +171,110 @@
   // ── Installed apps (.novaapp metadata lists) ────────────────────────────
   // Windows parity: the Uninstall inventory. `nova-app-package-store.js` is
   // the canonical reader/writer; a few surfaces read it directly.
+  //
+  // Two lists behind one flat API. Bundled system packages are machine facts
+  // (reconciled at boot, before anyone signs in) and stay in HKNS. Whatever a
+  // person installs belongs to that account and lives in its mounted HKNU, so
+  // an install by one user never shows up for another. Callers keep reading
+  // and writing a single list; the split happens here.
+
+  const USER_INSTALLED_PATH = 'HKNU/apps/installed';
+
+  function multiUserOn() {
+    return typeof NovaUserScope !== 'undefined' && !!NovaUserScope?.enabled?.();
+  }
+
+  // The account whose hives are mounted right now; '' at the login picker or
+  // when multi-user is off. Asks the registry instead of NovaUserScope because
+  // the stored active uid survives a page reload and the mounted hives don't.
+  function scopedUid() {
+    if (!multiUserOn()) return '';
+    try { return String(reg()?.mountedUserUid?.() || ''); } catch (_) { return ''; }
+  }
+
+  function isMachineApp(app) {
+    return !!app && (app.system === true || app.builtin === true || app.source === 'system-bundle');
+  }
+
+  function asList(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  function machineInstalled() {
+    return asList(readState(PATHS.installedApps, () => readJson(LEGACY_KEYS.installedApps, [])));
+  }
 
   function installedApps() {
-    const value = readState(PATHS.installedApps, () => readJson(LEGACY_KEYS.installedApps, []));
-    return Array.isArray(value) ? value : [];
+    const machine = machineInstalled();
+    if (!multiUserOn()) return machine;
+
+    const system = machine.filter(isMachineApp);
+    const uid = scopedUid();
+    if (!uid) return system;
+
+    let own;
+    try { own = reg().get(USER_INSTALLED_PATH); } catch (_) { own = undefined; }
+    if (Array.isArray(own)) return [...system, ...own];
+
+    // First read for this account. A machine upgraded from single-user still
+    // holds the owner's apps in the machine list, so the legacy owner adopts
+    // them. Nobody else inherits anything.
+    const adopted = uid === NovaUserScope.legacyOwnerUid()
+      ? machine.filter(app => !isMachineApp(app))
+      : [];
+    return [...system, ...adopted];
   }
 
   function setInstalledApps(list) {
     if (!Array.isArray(list)) return false;
-    return writeState(PATHS.installedApps, 'REG_JSON', list, LEGACY_KEYS.installedApps);
+    if (!multiUserOn()) {
+      return writeState(PATHS.installedApps, 'REG_JSON', list, LEGACY_KEYS.installedApps);
+    }
+
+    // Multi-user with the registry down means no account is mounted
+    // (scopedUid() is ''), so only system packages are read or saved and
+    // nobody's installs leak into the shared localStorage copy.
+    const uid = scopedUid();
+    const isLegacyOwner = !!uid && uid === NovaUserScope.legacyOwnerUid();
+
+    // Own list first: if it fails we must not purge the machine copy below.
+    if (uid) {
+      try {
+        reg().set(USER_INSTALLED_PATH, list.filter(app => !isMachineApp(app)), { type: 'REG_JSON', source: 'sysstate' });
+      } catch (_) {
+        return false;
+      }
+    }
+
+    // Non-system apps still sitting in the machine list are the legacy
+    // owner's, waiting to be adopted. Only the owner's own write may clear
+    // them; anyone else's write (or a pre-login boot write) must keep them.
+    const unadopted = isLegacyOwner ? [] : machineInstalled().filter(app => !isMachineApp(app));
+    return writeState(PATHS.installedApps, 'REG_JSON', [...list.filter(isMachineApp), ...unadopted], LEGACY_KEYS.installedApps);
   }
 
   // ── Permission grants (AppPermissionManager records) ────────────────────
 
+  // ── Per-user permission grants (multi-user) ──────────────────────────
+  // App permission grants are per-account: an app's camera/geolocation/
+  // calendar/contacts consents move from the machine hive to the mounted
+  // HKNU, so each account consents for itself. Machine-level app facts
+  // (installed, alarms) stay in HKNS. The 3.0.2→accounts migration copies
+  // the legacy machine grants into the owner's HKNU hive, so upgraded
+  // machines keep every consent.
+  function appPermissionsPath() {
+    const scoped = typeof NovaUserScope !== 'undefined' && NovaUserScope?.enabled?.();
+    return scoped ? 'HKNU/security/appPermissions' : PATHS.appPermissions;
+  }
+
   function appPermissions() {
-    const value = readState(PATHS.appPermissions, () => readJson(LEGACY_KEYS.appPermissions, []));
+    const value = readState(appPermissionsPath(), () => readJson(LEGACY_KEYS.appPermissions, []));
     return Array.isArray(value) ? value : [];
   }
 
   function setAppPermissions(grants) {
     if (!Array.isArray(grants)) return false;
-    return writeState(PATHS.appPermissions, 'REG_JSON', grants, LEGACY_KEYS.appPermissions);
+    return writeState(appPermissionsPath(), 'REG_JSON', grants, LEGACY_KEYS.appPermissions);
   }
 
   // ── Background alarm registry (app-sandbox nova:alarm:*) ────────────────
@@ -256,14 +339,40 @@
 
   // ── Web apps (web-app-manager payload { version, apps }) ───────────────
 
-  function webApps() {
-    const value = readState(PATHS.webApps, () => readJson(LEGACY_KEYS.webApps, null));
+  // Web-app shortcuts are personal: in multi-user mode each account keeps its
+  // own payload in its HKNU. The legacy owner of an upgraded machine adopts
+  // the old machine-wide payload once; nobody else inherits it. With no
+  // account mounted there is nothing to read or save.
+  const USER_WEBAPPS_PATH = 'HKNU/apps/webapps';
+
+  function asPayload(value) {
     return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
   }
 
+  function webApps() {
+    const machine = asPayload(readState(PATHS.webApps, () => readJson(LEGACY_KEYS.webApps, null)));
+    if (!multiUserOn()) return machine;
+
+    const uid = scopedUid();
+    if (!uid) return null;
+
+    let own;
+    try { own = reg().get(USER_WEBAPPS_PATH); } catch (_) { own = undefined; }
+    if (asPayload(own)) return own;
+    return uid === NovaUserScope.legacyOwnerUid() ? machine : null;
+  }
+
   function setWebApps(payload) {
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
-    return writeState(PATHS.webApps, 'REG_JSON', payload, LEGACY_KEYS.webApps);
+    if (!asPayload(payload)) return false;
+    if (!multiUserOn()) return writeState(PATHS.webApps, 'REG_JSON', payload, LEGACY_KEYS.webApps);
+
+    if (!scopedUid()) return true; // nothing mounted: drop it rather than write the shared copy
+    try {
+      reg().set(USER_WEBAPPS_PATH, payload, { type: 'REG_JSON', source: 'sysstate' });
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   // ── Built-in app registry cache (app-registry records) ─────────────────
@@ -321,6 +430,9 @@
     LEGACY_KEYS,
     installedApps,
     setInstalledApps,
+    isMachineApp,
+    scopedUid,
+    multiUserOn,
     appPermissions,
     setAppPermissions,
     alarms,

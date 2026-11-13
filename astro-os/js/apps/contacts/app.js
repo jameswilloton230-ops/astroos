@@ -360,7 +360,20 @@ registerApp({
           }
           const ico = createEl('span', { style: 'color:var(--text-muted);flex-shrink:0;margin-top:1px;' });
           if (iconSrc) {
-            ico.innerHTML = '<img src="' + iconSrc + '" width="15" height="15" style="display:inline-block;vertical-align:middle;object-fit:contain;pointer-events:none;" draggable="false" alt="" onerror="this.style.visibility=\'hidden\';">';
+            // SECURITY (2026-11-12 audit, finding L5): iconSrc reaches an
+            // innerHTML attribute concat — build the <img> through the DOM
+            // API so no caller-supplied string can break out of the
+            // attribute (today the only caller passes a constant, but the
+            // pattern must not wait for a dynamic caller to become one).
+            const img = document.createElement('img');
+            img.src = iconSrc;
+            img.width = 15;
+            img.height = 15;
+            img.style.cssText = 'display:inline-block;vertical-align:middle;object-fit:contain;pointer-events:none;';
+            img.draggable = false;
+            img.alt = '';
+            img.addEventListener('error', () => { img.style.visibility = 'hidden'; });
+            ico.replaceChildren(img);
           } else {
             ico.innerHTML = svgIcon(iconName, 15);
           }

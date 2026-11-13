@@ -1,7 +1,7 @@
 'use strict';
 // AstroOS — Recipe Box 2.1.0 compatibility suite.
 //
-// Drives the exact IPC sequence com.dirazcoder.recipebox runs at boot and
+// Drives the exact IPC sequence com.jameswilloton230-ops.recipebox runs at boot and
 // in its headline features through the REAL app-sandbox dispatcher, with
 // the real permission manager and a stubbed SystemDialogs:
 //
@@ -34,7 +34,7 @@ function check(name, cond, extra = '') {
   else { fail++; failures.push(name + (extra ? ` — ${extra}` : '')); console.log('  FAIL ' + name + (extra ? ` — ${extra}` : '')); }
 }
 
-const APP_ID = 'com.dirazcoder.recipebox';
+const APP_ID = 'com.jameswilloton230-ops.recipebox';
 const state = (env.state || {});
 
 // Real temp files for the picker stubs.

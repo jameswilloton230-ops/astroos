@@ -8,12 +8,12 @@
 # To turn debug OFF:  rm /boot/astroos-debug
 #
 # What debug mode does:
-#   * cage logs at WLR_DEBUG (CAGE_DEBUG, via patches/cage/0001-*.patch)
-#   * cage starts a wrapper instead of Xwayland that runs it with -verbose 10,
+#   * labwc logs at debug level (started with `labwc -d`)
+#   * labwc starts a wrapper instead of Xwayland that runs it with -verbose 10,
 #     LD_DEBUG=libs and (if installed) strace of failing file/ioctl calls
 #   * Mesa EGL / Chromium GPU-process logging is turned up
 #   * ~30s after boot a dump of the whole graphics state goes to
-#     /home/astroos/astroos-gl-debug.log, the serial console and astroos-kiosk.log
+#     /var/log/astroos/gl-debug.log, the serial console and kiosk.log
 # Resolve ASTROOS_GL_DEBUG. Priority: env (already set) > kernel cmdline > off.
 if [ -z "$ASTROOS_GL_DEBUG" ]; then
   _cmdline="$(cat /proc/cmdline 2>/dev/null)"
@@ -27,7 +27,34 @@ fi
 if [ "$ASTROOS_GL_DEBUG" = 1 ]; then
   export LIBGL_DEBUG=verbose
 fi
-GL_DEBUG_LOG=/home/astroos/astroos-gl-debug.log
+
+# --- Machine-home hygiene ---------------------------------------------------
+# The kiosk user's home is the SYSTEM area: ~/users/<account>/ trees plus
+# hidden dot-state. NOTHING user-visible — logs, caches, scratch files —
+# may sit at its root. Session logs live under /var/log/astroos and the
+# runtime cache under /var/cache/astroos (XDG_CACHE_HOME in the session env).
+# This boot janitor relocates the leftovers older builds dropped in the
+# home, one time, every boot (idempotent: clean machines take the fast
+# path).
+astroos_log_dir=/var/log/astroos
+astroos_cache_dir=/var/cache/astroos
+mkdir -p "$astroos_log_dir" "$astroos_cache_dir"
+chown astroos:astroos "$astroos_log_dir" "$astroos_cache_dir" 2>/dev/null || true
+for f in astroos-kiosk.log vmusr.log astroos-gl-debug.log \
+         xwayland-debug.log xwayland-probe.log xwayland-probe-strace.log \
+         xwayland-probe.strace xwayland.strace; do
+  if [ -f "/home/astroos/$f" ]; then
+    mv -f "/home/astroos/$f" "$astroos_log_dir/$f" 2>/dev/null || true
+  fi
+done
+for f in /home/astroos/xwayland-ld.*; do
+  [ -f "$f" ] && mv -f "$f" "$astroos_log_dir/" 2>/dev/null || true
+done
+# The cache is disposable by definition — once XDG_CACHE_HOME points
+# elsewhere nothing recreates it, so drop the old copy entirely.
+[ -d /home/astroos/.cache ] && rm -rf /home/astroos/.cache 2>/dev/null || true
+
+GL_DEBUG_LOG="$astroos_log_dir/gl-debug.log"
 
 # Recovery is entered from the GRUB entry (astroos.recovery=1 on the kernel
 # cmdline) or from a one-shot request file the desktop drops before it
@@ -51,19 +78,21 @@ astroos_recovery_requested() {
 astroos_gl_debug_setup() {
   gl_debug_env=""
   chromium_gl_debug=""
+  labwc_debug_flag=""
   [ "$ASTROOS_GL_DEBUG" = 1 ] || return 0
+  labwc_debug_flag="-d"
 
   mkdir -p /run/astroos-debug-bin
   cat > /run/astroos-debug-bin/Xwayland <<'XWRAP'
 #!/bin/sh
 # Installed by S99astroos (ASTROOS_GL_DEBUG). wlroots runs this instead of Xwayland.
-LOG=/home/astroos/xwayland-debug.log
+LOG=/var/log/astroos/xwayland-debug.log
 echo "=== $(date) Xwayland wrapper: $*" >> "$LOG"
-export LD_DEBUG=libs LD_DEBUG_OUTPUT=/home/astroos/xwayland-ld
+export LD_DEBUG=libs LD_DEBUG_OUTPUT=/var/log/astroos/xwayland-ld
 # strace is opt-in (ASTROOS_GL_STRACE=1). As the parent of Xwayland it can break
-# cage's startup handshake, which killed the first debug boot.
+# labwc's startup handshake, which killed the first debug boot.
 if [ "@STRACE@" = 1 ] && [ -x /usr/bin/strace ]; then
-  exec /usr/bin/strace -f -qq -Z -s 256 -o /home/astroos/xwayland.strace \
+  exec /usr/bin/strace -f -qq -Z -s 256 -o /var/log/astroos/xwayland.strace \
     -e trace=file,ioctl,connect,mmap \
     /usr/bin/Xwayland "$@" -verbose 10 >> "$LOG" 2>&1
 fi
@@ -71,15 +100,15 @@ exec /usr/bin/Xwayland "$@" -verbose 10 >> "$LOG" 2>&1
 XWRAP
   sed -i "s/@STRACE@/${ASTROOS_GL_STRACE:-0}/" /run/astroos-debug-bin/Xwayland
   chmod 0755 /run/astroos-debug-bin/Xwayland
-  rm -f /home/astroos/xwayland-debug.log /home/astroos/xwayland-ld.* /home/astroos/xwayland.strace
-  : > /home/astroos/xwayland-debug.log
-  chown astroos:astroos /home/astroos/xwayland-debug.log 2>/dev/null || true
+  rm -f /var/log/astroos/xwayland-debug.log /var/log/astroos/xwayland-ld.* /var/log/astroos/xwayland.strace
+  : > /var/log/astroos/xwayland-debug.log
+  chown astroos:astroos /var/log/astroos/xwayland-debug.log 2>/dev/null || true
 
   # WLR_XWAYLAND is honoured by wlroots; the PATH prefix is a fallback in case
   # it execs plain "Xwayland". Values must not contain quotes or dollar signs.
-  gl_debug_env="CAGE_DEBUG=1 EGL_LOG_LEVEL=debug MESA_DEBUG=1"
+  gl_debug_env="EGL_LOG_LEVEL=debug MESA_DEBUG=1"
   # The Xwayland wrapper is opt-in (ASTROOS_GL_XWRAP=1). In the last two debug boots
-  # cage's Xwayland died within 10-90ms whenever it was routed through it, so the
+  # labwc's Xwayland died within 10-90ms whenever it was routed through it, so the
   # default path leaves Xwayland alone and probes a second instance in the dump.
   if [ "${ASTROOS_GL_XWRAP:-0}" = 1 ]; then
     gl_debug_env="PATH=/run/astroos-debug-bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin WLR_XWAYLAND=/run/astroos-debug-bin/Xwayland $gl_debug_env"
@@ -114,7 +143,7 @@ astroos_gl_proc_report() {
   echo
   astroos_gl_sec "$name environment (graphics-relevant)"
   tr '\0' '\n' < "/proc/$pid/environ" \
-    | grep -E '^(LD_|LIBGL|EGL|MESA|WLR_|XDG_|WAYLAND|DISPLAY|PATH|GBM|LIBSEAT|CAGE)' || true
+    | grep -E '^(LD_|LIBGL|EGL|MESA|WLR_|XDG_|WAYLAND|DISPLAY|PATH|GBM|LIBSEAT|LABWC)' || true
   astroos_gl_sec "$name mapped libraries (graphics-relevant)"
   awk '{ print $6 }' "/proc/$pid/maps" | sort -u \
     | grep -i -E 'EGL|GLX|libGL|gbm|epoxy|dri|glvnd|vulkan|swiftshader|libdrm|wayland|pixman' || true
@@ -126,7 +155,7 @@ astroos_gl_debug_dump() {
   out="$GL_DEBUG_LOG"
   : > "$out"
 
-  # cage starts Xwayland lazily when Chromium connects; wait up to ~90s for it.
+  # labwc starts Xwayland lazily when Chromium connects; wait up to ~90s for it.
   i=0
   while [ "$i" -lt 45 ]; do
     astroos_gl_find_pid Xwayland >/dev/null && break
@@ -135,21 +164,21 @@ astroos_gl_debug_dump() {
   done
   sleep 8   # let glamor init finish and Chromium's GPU process retry
 
-  # Probe: a second Xwayland on :7 against the running cage, with full verbosity.
-  # Its log should say why glamor falls back, without touching cage's own Xwayland.
-  rm -f /home/astroos/xwayland-probe.log
-  su -s /bin/sh astroos -c 'export HOME=/home/astroos XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 LIBSEAT_BACKEND=seatd EGL_LOG_LEVEL=debug MESA_DEBUG=1; /usr/bin/Xwayland :7 -rootless -verbose 10 -noreset > /home/astroos/xwayland-probe.log 2>&1 & p=$!; sleep 6; kill $p 2>/dev/null; sleep 1; kill -9 $p 2>/dev/null; echo "probe exit handled" >> /home/astroos/xwayland-probe.log'
+  # Probe: a second Xwayland on :7 against the running labwc, with full verbosity.
+  # Its log should say why glamor falls back, without touching labwc's own Xwayland.
+  rm -f /var/log/astroos/xwayland-probe.log
+  su -s /bin/sh astroos -c 'export HOME=/home/astroos XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 LIBSEAT_BACKEND=seatd EGL_LOG_LEVEL=debug MESA_DEBUG=1; /usr/bin/Xwayland :7 -rootless -verbose 10 -noreset > /var/log/astroos/xwayland-probe.log 2>&1 & p=$!; sleep 6; kill $p 2>/dev/null; sleep 1; kill -9 $p 2>/dev/null; echo "probe exit handled" >> /var/log/astroos/xwayland-probe.log'
   # Same probe under strace (failed calls only) to catch the lookup glamor trips on.
-  rm -f /home/astroos/xwayland-probe.strace
+  rm -f /var/log/astroos/xwayland-probe.strace
   if [ -x /usr/bin/strace ]; then
-    su -s /bin/sh astroos -c 'export HOME=/home/astroos XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 LIBSEAT_BACKEND=seatd EGL_LOG_LEVEL=debug MESA_DEBUG=1; /usr/bin/strace -f -qq -Z -s 200 -o /home/astroos/xwayland-probe.strace -e trace=file,ioctl,connect /usr/bin/Xwayland :8 -rootless -verbose 10 -noreset > /home/astroos/xwayland-probe-strace.log 2>&1 & p=$!; sleep 8; kill $p 2>/dev/null; sleep 1; kill -9 $p 2>/dev/null' </dev/null >/dev/null 2>&1
+    su -s /bin/sh astroos -c 'export HOME=/home/astroos XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 LIBSEAT_BACKEND=seatd EGL_LOG_LEVEL=debug MESA_DEBUG=1; /usr/bin/strace -f -qq -Z -s 200 -o /var/log/astroos/xwayland-probe.strace -e trace=file,ioctl,connect /usr/bin/Xwayland :8 -rootless -verbose 10 -noreset > /var/log/astroos/xwayland-probe-strace.log 2>&1 & p=$!; sleep 8; kill $p 2>/dev/null; sleep 1; kill -9 $p 2>/dev/null' </dev/null >/dev/null 2>&1
   fi </dev/null >/dev/null 2>&1
 
   {
     echo "===== AstroOS GL DEBUG DUMP $(date) ====="
     astroos_gl_sec "versions"
     uname -a
-    /usr/bin/cage -v 2>&1 | head -2
+    /usr/bin/labwc -v 2>&1 | head -2
     /usr/bin/Xwayland -version 2>&1 | head -4
 
     astroos_gl_sec "DRM nodes"
@@ -178,13 +207,13 @@ astroos_gl_debug_dump() {
     ls -la /opt/astroos 2>&1 | head -60
     ls -la /opt/astroos/lib /opt/astroos/swiftshader 2>&1 | head -60
 
-    astroos_gl_proc_report cage
+    astroos_gl_proc_report labwc
     astroos_gl_proc_report Xwayland
 
     if [ -x /usr/bin/wayland-info ]; then
       astroos_gl_sec "wayland-info (compositor globals, dmabuf/drm)"
       su -s /bin/sh astroos -c 'export XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0; wayland-info 2>&1' \
-        | grep -i -E 'interface|dmabuf|wl_drm|format|device' | head -80
+        | grep -i -E 'interface|dmabuf|wl_drm|format|device|layer' | head -80
     fi
     if [ -x /usr/bin/eglinfo ]; then
       astroos_gl_sec "eglinfo"
@@ -195,22 +224,22 @@ astroos_gl_debug_dump() {
       su -s /bin/sh astroos -c 'export XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0 DISPLAY=:0; glxinfo -B 2>&1' | head -60
     fi
 
-    astroos_gl_sec "xwayland-probe.log ($(wc -l < /home/astroos/xwayland-probe.log 2>/dev/null) lines): glamor / egl / gbm / dmabuf lines"
-    grep -n -i -E 'glamor|egl|gbm|dmabuf|drm|dri3|glx|epoxy|wl_drm|modifier|fail|error' /home/astroos/xwayland-probe.log 2>&1 | head -120
+    astroos_gl_sec "xwayland-probe.log ($(wc -l < /var/log/astroos/xwayland-probe.log 2>/dev/null) lines): glamor / egl / gbm / dmabuf lines"
+    grep -n -i -E 'glamor|egl|gbm|dmabuf|drm|dri3|glx|epoxy|wl_drm|modifier|fail|error' /var/log/astroos/xwayland-probe.log 2>&1 | head -120
     astroos_gl_sec "xwayland-probe.log: head"
-    head -40 /home/astroos/xwayland-probe.log 2>&1
+    head -40 /var/log/astroos/xwayland-probe.log 2>&1
     astroos_gl_sec "xwayland-probe-strace.log (stderr of the strace'd probe)"
-    head -40 /home/astroos/xwayland-probe-strace.log 2>&1
+    head -40 /var/log/astroos/xwayland-probe-strace.log 2>&1
     astroos_gl_sec "xwayland-probe.strace: failed calls touching dri/drm/gbm/egl/mesa/glvnd"
-    grep -i -E 'dri|drm|gbm|egl|mesa|glvnd|render|wayland' /home/astroos/xwayland-probe.strace 2>&1 | tail -60
+    grep -i -E 'dri|drm|gbm|egl|mesa|glvnd|render|wayland' /var/log/astroos/xwayland-probe.strace 2>&1 | tail -60
     astroos_gl_sec "xwayland-debug.log: glamor / egl / gbm / dmabuf lines"
-    grep -n -i -E 'glamor|egl|gbm|dmabuf|drm|dri3|glx|epoxy|wl_drm|modifier' /home/astroos/xwayland-debug.log 2>&1 | head -120
+    grep -n -i -E 'glamor|egl|gbm|dmabuf|drm|dri3|glx|epoxy|wl_drm|modifier' /var/log/astroos/xwayland-debug.log 2>&1 | head -120
     astroos_gl_sec "xwayland-debug.log: tail"
-    tail -40 /home/astroos/xwayland-debug.log 2>&1
+    tail -40 /var/log/astroos/xwayland-debug.log 2>&1
     astroos_gl_sec "xwayland.strace: failed DRM/EGL/GBM/ioctl calls"
-    grep -E 'dri|gbm|EGL|egl|glvnd|vulkan|drm|ioctl' /home/astroos/xwayland.strace 2>&1 | head -150
+    grep -E 'dri|gbm|EGL|egl|glvnd|vulkan|drm|ioctl' /var/log/astroos/xwayland.strace 2>&1 | head -150
     astroos_gl_sec "xwayland LD_DEBUG: GL-related lines"
-    grep -h -i -E 'error|cannot|not found|libEGL|libGL\.so|libgbm|epoxy|glvnd|/dri/' /home/astroos/xwayland-ld.* 2>&1 | head -120
+    grep -h -i -E 'error|cannot|not found|libEGL|libGL\.so|libgbm|epoxy|glvnd|/dri/' /var/log/astroos/xwayland-ld.* 2>&1 | head -120
 
     echo
     echo "===== END AstroOS GL DEBUG DUMP ====="
@@ -218,7 +247,7 @@ astroos_gl_debug_dump() {
 
   chown astroos:astroos "$out" 2>/dev/null || true
   cat "$out" > /dev/ttyS0 2>/dev/null || true
-  cat "$out" >> /home/astroos/astroos-kiosk.log 2>/dev/null || true
+  cat "$out" >> /var/log/astroos/kiosk.log 2>/dev/null || true
 }
 
 case "$1" in
@@ -235,8 +264,8 @@ case "$1" in
       echo "AstroOS kiosk app is missing or not executable: $app" >&2
       exit 1
     fi
-    if [ ! -x /usr/bin/cage ]; then
-      echo "AstroOS kiosk: Cage is missing" >&2
+    if [ ! -x /usr/bin/labwc ]; then
+      echo "AstroOS kiosk: labwc is missing" >&2
       exit 1
     fi
 
@@ -351,9 +380,35 @@ case "$1" in
         ;;
     esac
     astroos_gl_debug_setup
+    # Seed the Chromium profile with the kiosk popup policy before the first
+    # launch: the save-password, save-address and save-card bubbles are driven
+    # by profile preferences, not command line switches. Writing them only when
+    # the Preferences file does not exist yet leaves user profile state (which
+    # Chromium owns afterwards) untouched on later boots.
+    profile_dir=/home/astroos/.config/novabyte/Default
+    if [ ! -f "$profile_dir/Preferences" ]; then
+      mkdir -p "$profile_dir" 2>/dev/null || true
+      cat > "$profile_dir/Preferences" <<'PREFS'
+{
+  "credentials_enable_service": false,
+  "credentials_enable_autosignin": false,
+  "autofill": {
+    "profile_enabled": false,
+    "credit_card_enabled": false
+  },
+  "profile": {
+    "name": "AstroOS"
+  }
+}
+PREFS
+      chown astroos:astroos "$profile_dir/Preferences" "$profile_dir" 2>/dev/null || true
+    fi
     cat > /run/astroos-kiosk-session.sh <<SESSION
 #!/bin/sh
 export LD_LIBRARY_PATH=/opt/astroos/lib:/opt/astroos
+# Marks the NW.js process as the locked-down kiosk instance: the main window
+# refuses WM close requests (Alt+F4) when this is set (scripts/startup.js).
+export ASTROOS_KIOSK=1
 [ -x /usr/bin/astroos-vmusr ] && /usr/bin/astroos-vmusr &
 exec /opt/astroos/AstroOS --enable-features=UseOzonePlatform \
   --ozone-platform=x11 --use-gl=angle --use-angle=gl \
@@ -373,17 +428,17 @@ SESSION
       exit 1
     fi
 
-    cat > /run/astroos-compositor-session.sh <<'SESSION'
+    cat > /run/astroos-compositor-session.sh <<SESSION
 #!/bin/sh
 umask 0007
-exec /usr/bin/cage -- /run/astroos-kiosk-session.sh
+exec /usr/bin/labwc $labwc_debug_flag -C /etc/labwc -S /run/astroos-kiosk-session.sh
 SESSION
     chmod 0755 /run/astroos-compositor-session.sh
 
     start-stop-daemon --start --background --make-pidfile \
       --pidfile /run/astroos-kiosk.pid --exec /usr/bin/openvt -- \
       -f -s -w -c 1 -- /bin/sh -c \
-      'n=0; while [ -f /run/astroos-kiosk.pid ] && [ "$n" -lt 5 ]; do su -s /bin/sh astroos -c "export HOME=/home/astroos NODE_ENV=production XDG_RUNTIME_DIR=/run/astroos-wayland LIBSEAT_BACKEND=seatd NODE_BIN_PATH=/opt/astroos/AstroOS ASTROOS_DATA_DIR=/home/astroos/.config/novabyte/runtime LD_LIBRARY_PATH=/opt/astroos/lib:/opt/astroos XCURSOR_THEME=whiteglass XCURSOR_SIZE=32 XCURSOR_PATH=/usr/share/icons:/usr/share/pixmaps WLR_NO_HARDWARE_CURSORS=1 '"$gl_debug_env"' XDG_CURRENT_DESKTOP=cage XDG_SESSION_TYPE=wayland GDK_BACKEND=wayland XKB_DEFAULT_LAYOUT='"$keyboard_layout"'; unset DBUS_SESSION_BUS_ADDRESS; exec /usr/bin/dbus-run-session -- /run/astroos-compositor-session.sh" 2>&1 | tee -a /home/astroos/astroos-kiosk.log /dev/ttyS0 >/dev/null; n=$((n+1)); echo "AstroOS kiosk: session exited, restart $n of 5 allowed" >/dev/ttyS0 2>/dev/null; sleep 2; done'
+      'n=0; while [ -f /run/astroos-kiosk.pid ] && [ "$n" -lt 5 ]; do su -s /bin/sh astroos -c "export HOME=/home/astroos NODE_ENV=production XDG_RUNTIME_DIR=/run/astroos-wayland XDG_CACHE_HOME=/var/cache/astroos LIBSEAT_BACKEND=seatd NODE_BIN_PATH=/opt/astroos/AstroOS ASTROOS_DATA_DIR=/home/astroos/.config/novabyte/runtime LD_LIBRARY_PATH=/opt/astroos/lib:/opt/astroos XCURSOR_THEME=whiteglass XCURSOR_SIZE=32 XCURSOR_PATH=/usr/share/icons:/usr/share/pixmaps WLR_NO_HARDWARE_CURSORS=1 '"$gl_debug_env"' XDG_CURRENT_DESKTOP=labwc XDG_SESSION_TYPE=wayland GDK_BACKEND=wayland XKB_DEFAULT_LAYOUT='"$keyboard_layout"'; unset DBUS_SESSION_BUS_ADDRESS; exec /usr/bin/dbus-run-session -- /run/astroos-compositor-session.sh" 2>&1 | tee -a /var/log/astroos/kiosk.log /dev/ttyS0 >/dev/null; n=$((n+1)); echo "AstroOS kiosk: session exited, restart $n of 5 allowed" >/dev/ttyS0 2>/dev/null; sleep 2; done'
 
     if [ "$ASTROOS_GL_DEBUG" = 1 ]; then
       astroos_gl_debug_dump </dev/null >/dev/null 2>&1 &

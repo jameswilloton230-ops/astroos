@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-iso:
@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -36,7 +38,38 @@ jobs:
       - name: Verify AstroOS OS integration contracts
         run: >-
           node --test
-          astro-os/os/package/astroos-kiosk/test-cage-kiosk.mjs
+          astro-os/os/package/astroos-kiosk/test-labwc-kiosk.mjs
+
+      - name: Update and push Settings build date
+        env:
+          TARGET_BRANCH: main
+        run: |
+          BUILD_DATE="$(TZ=Europe/London date +'%Y-%m-%d')"
+          export BUILD_DATE
+          node <<'NODE'
+          const fs = require('node:fs');
+          const file = 'astro-os/js/apps/settings/app.js';
+          const content = fs.readFileSync(file, 'utf8');
+          const pattern = /mkRow\('Build Date',\s*'\d{4}-\d{2}-\d{2}'\)/g;
+          const matches = content.match(pattern) || [];
+          if (matches.length !== 1) {
+            throw new Error(`Expected one Settings Build Date value, found ${matches.length}.`);
+          }
+          const updated = content.replace(pattern, `mkRow('Build Date',  '${process.env.BUILD_DATE}')`);
+          if (updated !== content) fs.writeFileSync(file, updated);
+          NODE
+
+          if ! git diff --quiet -- astro-os/js/apps/settings/app.js; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add astro-os/js/apps/settings/app.js
+            git commit \
+              -m "chore: update Settings build date" \
+              -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+            git push origin "HEAD:${TARGET_BRANCH}"
+          else
+            echo "Settings Build Date is already ${BUILD_DATE}; no commit needed."
+          fi
 
       - name: Build Linux NW.js app
         working-directory: astro-os
@@ -81,9 +114,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: astro-os/os/output
-          key: astroos-buildroot-output-v4-${{ runner.os }}-${{ hashFiles('astro-os/os/build-iso.sh', 'astro-os/os/configs/**', 'astro-os/os/board/**', 'astro-os/os/package/astroos-kiosk/**', 'astro-os/os/package/astroos-install/**', 'astro-os/os/package/astroos-power/**', 'astro-os/os/Config.in', 'astro-os/os/external.*') }}
+          key: astroos-buildroot-output-v5-${{ runner.os }}-${{ hashFiles('astro-os/os/build-iso.sh', 'astro-os/os/configs/**', 'astro-os/os/board/**', 'astro-os/os/package/astroos-kiosk/**', 'astro-os/os/package/astroos-install/**', 'astro-os/os/package/astroos-power/**', 'astro-os/os/Config.in', 'astro-os/os/external.*') }}
           restore-keys: |
-            astroos-buildroot-output-v4-${{ runner.os }}-
+            astroos-buildroot-output-v5-${{ runner.os }}-
 
       - name: Build bootable AstroOS ISO
         run: bash astro-os/os/build-iso.sh
@@ -94,7 +127,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: astro-os/os/output
-          key: astroos-buildroot-output-v4-${{ runner.os }}-${{ hashFiles('astro-os/os/build-iso.sh', 'astro-os/os/configs/**', 'astro-os/os/board/**', 'astro-os/os/package/astroos-kiosk/**', 'astro-os/os/package/astroos-install/**', 'astro-os/os/package/astroos-power/**', 'astro-os/os/Config.in', 'astro-os/os/external.*') }}
+          key: astroos-buildroot-output-v5-${{ runner.os }}-${{ hashFiles('astro-os/os/build-iso.sh', 'astro-os/os/configs/**', 'astro-os/os/board/**', 'astro-os/os/package/astroos-kiosk/**', 'astro-os/os/package/astroos-install/**', 'astro-os/os/package/astroos-power/**', 'astro-os/os/Config.in', 'astro-os/os/external.*') }}
 
       - name: Upload ISO
         uses: actions/upload-artifact@v4

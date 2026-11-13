@@ -94,6 +94,8 @@ describe('NovaReg app (js/apps/novareg)', () => {
 
   it('shows a friendly name for the selected key at boot and after navigation', async () => {
     const { content, window } = await loadEditor();
+    expect(content.style.background).toBe('var(--bg-base)');
+    expect(content.style.color).toBe('var(--text-primary)');
     // Boot selection is the HKNS hive root.
     expect(content.textContent).toContain('System (machine)');
     expect(content.textContent).toContain('Machine-wide configuration');

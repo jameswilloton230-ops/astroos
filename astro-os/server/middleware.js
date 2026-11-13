@@ -11,6 +11,26 @@ const SqliteStore = require('better-sqlite3-session-store')(session);
 const { isTrustedSystemAppRequest } = require('./rate-limit-auth');
 const { getRuntimeDataDir } = require('../scripts/runtime-data-dir');
 
+// Signs a raw session id into the connect.sid cookie form express-session
+// verifies ('s:<sid>.<hmac>' — express-session adds the s: itself around
+// cookie-signature when IT writes the cookie, so the bearer path must match
+// that exact form), so the X-Nova-Session bearer header can target a specific
+// live session (the session machinery for user switching) without touching the
+// browser's single cookie slot.
+let signSessionCookie = null;
+try {
+    const cookieSignature = require('cookie-signature');
+    if (typeof cookieSignature.sign === 'function') {
+        signSessionCookie = (sid, secret) => `s:${cookieSignature.sign(sid, secret)}`;
+    }
+} catch (_) { signSessionCookie = null; }
+if (!signSessionCookie) {
+    // Manual fallback with the identical format: s:<sid>.<hmac-sha256-base64>
+    const nodeCrypto = require('crypto');
+    signSessionCookie = (sid, secret) =>
+        `s:${sid}.${nodeCrypto.createHmac('sha256', secret).update(sid).digest('base64').replace(/=+$/, '')}`;
+}
+
 // Sessions persist to disk here so they survive server restarts —
 // without this, express-session falls back to MemoryStore, which is
 // wiped every time the process dies (refresh survives, restart doesn't).
@@ -55,6 +75,10 @@ const PREFIX_SKIP_PATHS = [
     // trusted via signature (js/platform/security/system-fetch.js +
     // isTrustedSystemAppRequest below).
     '/api/apps/serve/',
+    // The auth family carries its own dedicated limiter tier (authLimiter,
+    // mounted below) — riding the global one as well would double-count
+    // every picker keystroke against the 100/15min shared budget.
+    '/api/auth/',
 ];
 
 function shouldSkipGlobalApiRateLimit(req) {
@@ -189,6 +213,7 @@ function setupMiddleware(app) {
         allowedHeaders: [
             'Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-Token',
             'X-Nova-System-App', 'X-Nova-System-Time', 'X-Nova-System-Signature',
+            'X-Nova-Session',
         ],
         exposedHeaders: ['X-CSRF-Token'],
         maxAge: 86400
@@ -278,7 +303,20 @@ function setupMiddleware(app) {
         skip: isTrustedSystemAppRequest,
     });
 
+    // Auth surface tier — its own budget instead of the global one, so the
+    // login picker can never be starved by general API traffic (and vice
+    // versa: brute force cannot ride the generous global bucket either).
+    const authLimiter = rateLimit({
+        windowMs: 60 * 1000,
+        max: 30,   // logins/reverify/webauthn attempts per minute per IP
+        message: { error: 'Too many authentication attempts, please slow down.' },
+        standardHeaders: true,
+        legacyHeaders: false,
+        skip: isTrustedSystemAppRequest,
+    });
+
     app.use('/api/', limiter);
+    app.use('/api/auth/', authLimiter);
     app.use('/api/email/connect', emailConnectLimiter);
     app.use('/api/email/disconnect', emailConnectLimiter);
     app.use('/api/email/preview', emailConnectLimiter);
@@ -295,6 +333,33 @@ function setupMiddleware(app) {
     app.use(express.json({ limit: BODY_SIZE_LIMIT }));
     app.use(express.urlencoded({ extended: true, limit: BODY_SIZE_LIMIT }));
     app.use(cookieParser());
+
+    // Bearer session targeting: the trusted host presents X-Nova-Session with
+    // an opaque session id (issued by /api/auth/login) and the chain resolves
+    // it to that session BEFORE express-session runs. cookieParser has already
+    // materialized req.cookies by this point, so BOTH the header and the parsed
+    // cookie map are pointed at the signed form for that sid — rewriting only
+    // the header would leave express-session reading the anonymous cookie.
+    // The browser cookie jar is single-slot, but user switching needs two live
+    // sessions at once — the header is how the departing (suspended) session
+    // stays reachable. The token never crosses out of host memory: sandboxed
+    // webviews keep their own cookie partitions and never see this header,
+    // exactly like the per-launch system-app HMAC headers.
+    const NOVA_SESSION_HEADER = 'x-nova-session';
+    const SID_RE = /^[A-Za-z0-9_-]{10,128}$/;
+    app.use((req, res, next) => {
+        const sid = req.get(NOVA_SESSION_HEADER);
+        if (sid && SID_RE.test(sid) && process.env.SESSION_SECRET) {
+            const signed = signSessionCookie(sid, process.env.SESSION_SECRET);
+            req.headers.cookie = `connect.sid=${encodeURIComponent(signed)}`;
+            if (req.cookies && typeof req.cookies === 'object') {
+                req.cookies['connect.sid'] = signed;
+                delete req.signedCookies?.['connect.sid'];
+            }
+            req.novaBearerSession = sid;
+        }
+        next();
+    });
 
     // Session middleware (required for CSRF protection)
     sessionDb = new Database(SESSION_DB_PATH);
@@ -326,20 +391,38 @@ function setupMiddleware(app) {
         }
     }));
 
-    // Populate req.user for the local single-user OS. There's no login/
-    // account system anywhere in this codebase — req.user was previously
-    // never assigned at all, which meant every `req.user?.role === 'admin'`
-    // check in security/routes.js was permanently false, and every
-    // `req.user?.id` was permanently undefined. This derives an identity
-    // from the existing Express session (already persisted via SqliteStore
-    // above) plus the local admin-state flag, so those checks mean
-    // something real instead of being dead branches.
+    // Identity resolution: an authenticated session carries uid/role/uname
+    // (multi-user accounts, /api/auth/login). Anonymous sessions keep the
+    // legacy single-user derivation — adminEnabled grants admin ONLY while
+    // no real accounts exist; once users.db has rows the anonymous world is
+    // standard-user by construction, so the legacy admin-mode flag can no
+    // longer hand out admin authority to every request.
     const { isAdminEnabled } = require('./security/admin-state');
+    let usersDbModule = null;
+    try { usersDbModule = require('./security/users-db'); } catch (_) { usersDbModule = null; }
+    const legacyAdminAllowed = () => {
+        if (!usersDbModule) return isAdminEnabled();
+        try { return !usersDbModule.hasAccounts() && isAdminEnabled(); }
+        catch (_) { return isAdminEnabled(); }
+    };
     app.use((req, res, next) => {
-        req.user = {
-            id: req.sessionID,
-            role: isAdminEnabled() ? 'admin' : 'user'
-        };
+        const s = req.session;
+        if (s && s.uid && s.uname) {
+            const adminRole = s.role === 'owner' || s.role === 'admin';
+            req.user = {
+                id: s.uid,
+                uid: s.uid,
+                role: adminRole ? 'admin' : 'user',
+                uname: s.uname,
+                suspended: !!s.suspended,
+                locked: !!s.lockedAt,
+            };
+        } else {
+            req.user = {
+                id: req.sessionID,
+                role: legacyAdminAllowed() ? 'admin' : 'user'
+            };
+        }
         // Stamped onto the session itself (not just req.user) so the
         // /api/security/sessions listing — which reads the SQLite session
         // store directly, not live request objects — can show which

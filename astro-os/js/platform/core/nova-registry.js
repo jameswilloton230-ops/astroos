@@ -56,6 +56,20 @@ const NovaRegistry = (() => {
   // Hive alias — HKCU is to HKNU what HKEY_CURRENT_USER is to a user hive.
   const HIVE_ALIASES = Object.freeze({ HKCU: 'HKNU' });
 
+  // The three per-account hives. HKNS is and stays the machine hive, loaded
+  // at boot exactly as today; HKNU/HKNA/HKND become MOUNTED hives — the
+  // SessionManager mounts them from a per-account directory at login and
+  // flushes them at logout or switch. Mounted documents carry the owner in
+  // their storage name (user:<segment>:<HIVE>) and the storage adapter resolves
+  // that to the per-account file layout, so every other storage surface of
+  // the engine is untouched. Because HKCU was always an alias of HKNU and
+  // every existing path string keeps its shape, no app-visible API changes.
+  // The segment is the account's USERNAME (usernames allow dots); machines
+  // that predate that layout keep their uid-keyed documents byte-for-byte —
+  // the login-time layout upgrade moves the directories, not the engine.
+  const USER_HIVES = Object.freeze(['HKNU', 'HKNA', 'HKND']);
+  const USER_DOC_RE = /^user:([A-Za-z0-9][A-Za-z0-9._-]{0,127}):(HKNU|HKNA|HKND)$/;
+
   const VALUE_TYPES = Object.freeze([
     'REG_SZ', 'REG_EXPAND_SZ', 'REG_MULTI_SZ', 'REG_BOOL', 'REG_DWORD', 'REG_QWORD', 'REG_JSON', 'REG_BINARY',
   ]);
@@ -109,11 +123,15 @@ const NovaRegistry = (() => {
     // system (machine-scoped) keys
     osVersion: 'HKNS/system/osVersion',
     devMode: 'HKNS/system/devMode',
-    // security keys
-    lockPin: 'HKNS/security/lockPin',
-    pinSalt: 'HKNS/security/pinSalt',
+    // security keys — the multi-user account redesign removed the client-side
+    // credential keys from the settings map: lockPin, pinSalt and
+    // biometricCredentialId now live in the server's users.db (scrypt rows
+    // and WebAuthn descriptors), and the account record owns identity, so
+    // `username` is gone too. The registry paths themselves are not migrated
+    // away — the 3.0.2 → accounts migration deletes the legacy key values at
+    // import time, and machines that never enable multi-user keep the
+    // single-user behaviour byte-for-byte through the generic-area scan.
     bootPassword: 'HKNS/security/bootPassword',
-    biometricCredentialId: 'HKNS/security/biometricCredentialId',
     rootAccessEnabled: 'HKNS/security/rootAccessEnabled',
     prohibitWallpaperChange: 'HKNS/security/policy/prohibitWallpaperChange',
     // per-user preferences
@@ -128,7 +146,6 @@ const NovaRegistry = (() => {
     autoLock: 'HKNU/settings/autoLock',
     searchEngine: 'HKNU/settings/searchEngine',
     proxyUrl: 'HKNU/settings/proxyUrl',
-    username: 'HKNU/settings/username',
     region: 'HKNU/settings/region',
     keyboardLayout: 'HKNU/settings/keyboardLayout',
     timezone: 'HKNU/settings/timezone',
@@ -207,7 +224,7 @@ const NovaRegistry = (() => {
   let state = null; // { hives, storage, events, logger, mirrorAttached, audit, batchDepth, batchLog }
 
   function freshState() {
-    return { hives: {}, storage: null, events: null, logger: null, mirrorAttached: false, audit: [], batchDepth: 0, batchLog: null };
+    return { hives: {}, storage: null, events: null, logger: null, mirrorAttached: false, audit: [], batchDepth: 0, batchLog: null, userUid: null, userVolatile: false, userSealed: false };
   }
 
   function logWarn(...args) {
@@ -234,25 +251,50 @@ const NovaRegistry = (() => {
         const path = require('path');
         const os = require('os');
         const dir = path.join(os.homedir(), '.config', 'novabyte', 'registry');
+        // user:<segment>:<HIVE> documents resolve to the account's own registry
+        // directory — the mounted-hive file layout. The segment is the
+        // username when one is known, else the uid (legacy layouts).
+        // Everything else keeps the machine location.
+        const fileFor = (name) => {
+          const m = USER_DOC_RE.exec(name);
+          if (m) return path.join(os.homedir(), '.config', 'novabyte', 'users', m[1], 'registry', `${m[2]}.json`);
+          return path.join(dir, `${name}.json`);
+        };
         native = {
-          file: (name) => path.join(dir, `${name}.json`),
-          read: (name) => fs.readFileSync(native.file(name), 'utf8'),
+          file: fileFor,
+          read: (name) => fs.readFileSync(fileFor(name), 'utf8'),
           write: (name, json) => {
-            fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-            const tmp = `${native.file(name)}.${process.pid}.tmp`;
+            fs.mkdirSync(path.dirname(fileFor(name)), { recursive: true, mode: 0o700 });
+            const tmp = `${fileFor(name)}.${process.pid}.tmp`;
             fs.writeFileSync(tmp, json, { mode: 0o600 });
-            fs.renameSync(tmp, native.file(name));
+            fs.renameSync(tmp, fileFor(name));
           },
           quarantine: (name, raw) => {
-            try { fs.writeFileSync(`${native.file(name)}.corrupt`, String(raw), { mode: 0o600 }); } catch (_) {}
+            try { fs.writeFileSync(`${fileFor(name)}.corrupt`, String(raw), { mode: 0o600 }); } catch (_) {}
           },
         };
       }
     } catch (_) { native = null; }
 
-    const lsKey = (name) => `nova_registry_hive_${name}`;
+    const lsKey = (name) => {
+      const m = USER_DOC_RE.exec(name);
+      return m ? `nova_registry_hive_u_${m[1]}_${m[2]}` : `nova_registry_hive_${name}`;
+    };
 
     return {
+      // Single-document read — mountUserHives loads one account's hive
+      // without disturbing the machine documents.
+      read(name) {
+        if (native) {
+          try { return native.read(name); } catch (_) { /* fall through to localStorage */ }
+        }
+        try {
+          if (typeof localStorage !== 'undefined' && localStorage) {
+            return localStorage.getItem(lsKey(name));
+          }
+        } catch (_) { }
+        return null;
+      },
       loadAll() {
         const out = {};
         // The four hives decode through decodeHive (quarantine on corruption);
@@ -540,6 +582,14 @@ const NovaRegistry = (() => {
   // ── Mutation core (clone → validate → swap → persist) ──────────────────
 
   function commitMutation(hive, mutator) {
+    // Sealed phase: the account hives were unmounted (logout / switch) and
+    // no account is mounted — a user-hive write here would land in the
+    // MACHINE documents with the departed account's data, so it is refused.
+    // Machines with multi-user disabled never seal (userUid stays null and
+    // userSealed stays false → behaviour byte-identical to 3.0.2).
+    if (state.userSealed && USER_HIVES.includes(hive)) {
+      throw regError('NOT_READY', `hive ${hive} belongs to an account — no account hives are mounted`);
+    }
     const current = ensureHive(state.hives, hive);
     const clone = JSON.parse(JSON.stringify(current));
     const result = mutator(clone); // throws regError on any validation failure
@@ -552,8 +602,9 @@ const NovaRegistry = (() => {
     }
     state.hives[hive] = clone;
     // Inside batch() persistence and events are deferred to commit time.
-    if (!state.batchDepth && state.storage && typeof state.storage.save === 'function') {
-      state.storage.save(hive, clone);
+    // Volatile mounts (guest sessions) persist nothing — discarded by design.
+    if (!state.batchDepth && !state.userVolatile && state.storage && typeof state.storage.save === 'function') {
+      state.storage.save(storageDocFor(hive), clone);
     }
     return result;
   }
@@ -1131,7 +1182,7 @@ const NovaRegistry = (() => {
     state.batchLog = null;
     const touchedHives = new Set(log.filter((e) => e.hive).map((e) => e.hive));
     for (const hive of touchedHives) {
-      if (state.storage && state.storage.save) state.storage.save(hive, state.hives[hive]);
+      if (state.storage && state.storage.save) state.storage.save(storageDocFor(hive), state.hives[hive]);
     }
     let events = 0;
     for (const entry of log) {
@@ -1208,7 +1259,7 @@ const NovaRegistry = (() => {
     restored.version = LIMITS.HIVE_SCHEMA_VERSION;
     restored.hive = hive;
     state.hives[hive] = restored;
-    if (state.storage && state.storage.save) state.storage.save(hive, restored);
+    if (state.storage && state.storage.save) state.storage.save(storageDocFor(hive), restored);
     auditAppend(options, 'restore', hive, null, id);
     emitChanged(hive, hive, { type: null, value: null, appId: options.appId, source: options.source || 'snapshot' });
     return { path: hive, restored: id, ts: entry.ts };
@@ -1376,6 +1427,89 @@ const NovaRegistry = (() => {
     return state;
   }
 
+  // ── Mounted per-user hives ───────────────────────────────────────────
+
+  /** Storage document name for a hive, honouring the mounted account. */
+  function storageDocFor(hive) {
+    return (state.userUid && USER_HIVES.includes(hive)) ? `user:${state.userUid}:${hive}` : hive;
+  }
+
+  function mountedUserUid() {
+    return state ? state.userUid : null;
+  }
+
+  /**
+   * Flushes the currently mounted user hives to their per-account documents.
+   * Volatile mounts (guest sessions) are never written — they are discarded
+   * by design. Machine documents (HKNS/AUDIT/SNAPSHOTS) are unaffected.
+   */
+  function flushUserHives() {
+    ensureReady();
+    if (!state.userUid) return false;
+    if (state.userVolatile) return true; // volatile: nothing to flush
+    for (const hive of USER_HIVES) {
+      const doc = storageDocFor(hive);
+      const data = state.hives[hive];
+      if (!data) continue;
+      try {
+        if (state.storage && typeof state.storage.save === 'function') {
+          state.storage.save(doc, data);
+        }
+      } catch (err) { logWarn('user hive flush failed', hive, err); }
+    }
+    return true;
+  }
+
+  /**
+   * Mounts HKNU/HKNA/HKND for one account: flushes any previous mount, then
+   * loads the account's hive documents (a missing document starts a fresh
+   * hive — first login for a new account). Called ONLY by the SessionManager
+   * at login: it is the one component permitted to swap registry mounts, so
+   * the number of places scoping can be wrong stays at one. The segment is
+   * the account's username (user:<username>:<HIVE> on disk under
+   * users/<username>/registry/); callers without a username keep the legacy
+   * uid-keyed addressing byte-for-byte.
+   */
+  function mountUserHives(segment, options = {}) {
+    ensureReady();
+    if (typeof segment !== 'string' || !USER_DOC_RE.exec(`user:${segment}:HKNU`)) {
+      throw regError('INVALID_ARGS', `invalid account segment for hive mounting: '${segment}'`);
+    }
+    flushUserHives();
+    state.userUid = segment;
+    state.userVolatile = options.volatile === true;
+    state.userSealed = false;
+    for (const hive of USER_HIVES) {
+      const doc = storageDocFor(hive);
+      let raw = null;
+      if (!state.userVolatile && state.storage && typeof state.storage.read === 'function') {
+        try { raw = state.storage.read(doc); } catch (_) { raw = null; }
+      }
+      const decoded = decodeHive(hive, raw, (r) => {
+        if (state.storage && typeof state.storage.quarantine === 'function') {
+          try { state.storage.quarantine(doc, r); } catch (_) { }
+        }
+      });
+      state.hives[hive] = decoded || { version: LIMITS.HIVE_SCHEMA_VERSION, hive, keys: {}, values: {} };
+    }
+    return api;
+  }
+
+  /**
+   * Unmounts the account hives (flush first). After this the user hives stay
+   * in memory but every further mutation is refused, so a picker-phase write
+   * can never land in the machine documents. The next mountUserHives()
+   * replaces the in-memory trees entirely.
+   */
+  function unmountUserHives() {
+    ensureReady();
+    flushUserHives();
+    state.userUid = null;
+    state.userVolatile = false;
+    state.userSealed = true;
+    return api;
+  }
+
   const api = {
     HIVES,
     HIVE_ALIASES,
@@ -1416,6 +1550,11 @@ const NovaRegistry = (() => {
     expand: expandString,
     attachSettingsMirror,
     hiveSnapshot,
+    // Mounted per-account hives (multi-user): SessionManager-only surface.
+    mountUserHives,
+    unmountUserHives,
+    flushUserHives,
+    mountedUserUid,
     // Test/introspection hooks. resetState() drops all in-memory and does
     // NOT persist — tests re-init with their own storage afterwards.
     _internal: {

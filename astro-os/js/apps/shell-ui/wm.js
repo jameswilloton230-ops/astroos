@@ -146,6 +146,7 @@ const WM = window.WM = (() => {
         role:         'dialog',
         'aria-label': `${app.name} window`,
       });
+      if (options.fullscreen === true) win.classList.add('app-window--fullscreen');
       win.dataset.windowId = id;
       win.dataset.appId    = appId;
 
@@ -185,6 +186,7 @@ const WM = window.WM = (() => {
         x: cfg.x, y: cfg.y, width: cfg.width, height: cfg.height,
         minWidth: cfg.minWidth, minHeight: cfg.minHeight,
         maxWidth: cfg.maxWidth, maxHeight: cfg.maxHeight,
+        fullscreen: options.fullscreen === true,
         maximized: false, minimized: false,
         preMaxState: null, snapSide: null, preSnapState: null,
         _minimizeTimer: null,
@@ -673,7 +675,9 @@ const WM = window.WM = (() => {
       if (!app) return;
       const el = state.element;
 
-      if (app.alwaysOnTop) {
+      if (state.fullscreen) {
+        el.style.zIndex = String(9999 + (++OS.windowZCounter));
+      } else if (app.alwaysOnTop) {
         const phishingCombo = app.frame === false && app.transparent === true;
         if (phishingCombo) {
           console.warn('[WM] Phishing overlay risk: app', app.id, 'uses alwaysOnTop + frameless + transparent. Restricting z-index below system chrome.');
@@ -748,7 +752,7 @@ const WM = window.WM = (() => {
       if (!state.minimized && OS.focusedWindowId === id) return;
       if (state.minimized) wm.restoreWindow(id);
       const app = OS.apps?.[state.appId];
-      if (app?.alwaysOnTop) {
+      if (state.fullscreen || app?.alwaysOnTop) {
         // Stay above the normal stacking range, but keep relative ordering
         // among multiple always-on-top windows using the same counter.
         state.element.style.zIndex = String(9999 + (++OS.windowZCounter));

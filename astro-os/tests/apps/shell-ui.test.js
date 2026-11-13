@@ -285,6 +285,13 @@ describe('WM (js/apps/shell-ui/wm.js)', () => {
       expect(state.height).toBe(768);
     });
 
+    it('marks explicitly fullscreen windows to hide the window chrome', () => {
+      const wm = requireWM();
+      wm.init();
+      const state = wm.createWindow('nook', { fullscreen: true });
+      expect(state.element.classList.add).toHaveBeenCalledWith('app-window--fullscreen');
+    });
+
     it('clamps spawn position to work area', () => {
       const wm = requireWM();
       wm.init();

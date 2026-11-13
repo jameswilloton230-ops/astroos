@@ -1,6 +1,7 @@
 // tests/apps/files.test.js — window app: file manager grid/list views, folder
 // navigation, search, selection, context menus, rename, trash, and file drop.
 import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { posix as linuxPath } from 'node:path';
 import { resetTestStorage } from '../setup.js';
 import { loadWindowApp, initApp, settle } from '../helpers/app-harness.js';
 import { createFakeFS } from '../helpers/fake-fs.js';
@@ -98,6 +99,41 @@ describe('Files app (js/apps/files)', () => {
     expect(content.textContent).toContain('App data directory missing');
     expect(content.textContent).toContain('com.astroos.files');
     expect(content.querySelector('.vault-app-root')).toBeNull();
+  });
+
+  it('opens the Linux filesystem at the mounted user home', async () => {
+    const userHome = '/home/astroos/users/sam';
+    const fsPromises = {
+      readdir: vi.fn(async () => []),
+      lstat: vi.fn(),
+      stat: vi.fn(async () => ({ isDirectory: () => true })),
+    };
+    const loaded = await loadWindowApp('files', {
+      stubs: {
+        extra: {
+          process: { platform: 'linux' },
+          FS: { rootId: userHome },
+          require: (name) => {
+            if (name === 'fs') return { promises: fsPromises, constants: {} };
+            if (name === 'path') return linuxPath;
+            if (name === 'os') return { homedir: () => '/home/astroos' };
+            if (name === 'child_process') return {};
+            throw new Error(`Unexpected module: ${name}`);
+          },
+        },
+      },
+    });
+    const state = { cleanups: [] };
+    const content = initApp(loaded.app, { window: loaded.window, state });
+    await settle();
+
+    const pathInput = content.querySelector('[aria-label="Linux filesystem path"]');
+    expect(pathInput.value).toBe(userHome);
+    content.querySelector('[aria-label="Open home folder"]').click();
+    await settle();
+    expect(state._linuxPath).toBe(userHome);
+    expect(fsPromises.stat).toHaveBeenCalledWith(userHome);
+    state.cleanups.forEach(cleanup => cleanup());
   });
 
   it('renders the toolbar, default system folders and seeded files in the grid', async () => {
@@ -343,6 +379,23 @@ describe('Files app (js/apps/files)', () => {
     items.find((i) => i.textContent.includes('Docs'))
       .dispatchEvent(new window.MouseEvent('dblclick', { bubbles: true }));
     expect(content.querySelector('#file-browser-path-input').value).toBe('/Docs');
+  });
+
+  it('infers media MIME types before handing files to the existing app-open contract', async () => {
+    const fs = makeFS();
+    await fs.createFile(fs.rootId, 'photo.avif', 'image-bytes', 'application/octet-stream');
+    await fs.createFile(fs.rootId, 'recording.aac', 'audio-bytes', 'application/octet-stream');
+    const { content, window, openFileWithDefaultApp } = await loadFiles({ fs });
+
+    for (const name of ['photo.avif', 'recording.aac']) {
+      fileItems(content).find((item) => item.textContent.includes(name))
+        .dispatchEvent(new window.MouseEvent('dblclick', { bubbles: true }));
+    }
+
+    expect(openFileWithDefaultApp).toHaveBeenNthCalledWith(1,
+      expect.objectContaining({ name: 'photo.avif', mimeType: 'image/avif' }));
+    expect(openFileWithDefaultApp).toHaveBeenNthCalledWith(2,
+      expect.objectContaining({ name: 'recording.aac', mimeType: 'audio/aac' }));
   });
 
   it('restores the view bag (HKNU/shell/bags/files) on open and persists changes', async () => {

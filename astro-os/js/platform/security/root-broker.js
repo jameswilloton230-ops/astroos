@@ -154,6 +154,14 @@
 
   function rootModeEnabled() {
     try {
+      // Multi-user: root broker access additionally requires an admin
+      // session — closing the gap where any user who flipped a developer
+      // setting could sudo. Dev machines with multi-user disabled keep the
+      // original 3.0.2 behaviour byte-for-byte.
+      if (typeof NovaUserScope !== 'undefined' && NovaUserScope?.enabled?.()) {
+        const adminSession = typeof window !== 'undefined' && !!window.SessionManager?.isAdmin?.();
+        if (!adminSession) return false;
+      }
       return typeof OS !== 'undefined' &&
         OS.settings?.get?.('devMode') === true &&
         OS.settings?.get?.('rootAccessEnabled') === true;

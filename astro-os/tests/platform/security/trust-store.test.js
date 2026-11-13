@@ -12,6 +12,7 @@ import nodePath from 'node:path';
 
 const TRUST_STORE_PATH = '../../../js/platform/security/trust-store.js';
 const REVOCATION_FILE = 'revoked-signatures.json';
+const TEST_KEY_PATH = '../../../keys/test-system-key.json';
 
 let tmpDir;
 let cwdSpy;
@@ -22,6 +23,29 @@ function requireFresh(path) {
   const resolved = require.resolve(path);
   if (require.cache && require.cache[resolved]) delete require.cache[resolved];
   return require(path);
+}
+
+// The trust-store module reads the release-key override from the page's
+// <meta name="nova-system-signing-jwk"> tag at load time. These tests run
+// in the plain-Node environment (no real document), so the meta tag is
+// faked through a minimal document global — exactly the surface the loader
+// touches (querySelector + getAttribute).
+function withSystemKeyMeta(content, fn) {
+  const meta = {
+    getAttribute(name) { return name === 'content' ? content : null; },
+  };
+  const previous = globalThis.document;
+  globalThis.document = {
+    querySelector(selector) {
+      return typeof selector === 'string' && selector.includes('nova-system-signing-jwk') ? meta : null;
+    },
+  };
+  try {
+    fn();
+  } finally {
+    if (previous === undefined) delete globalThis.document;
+    else globalThis.document = previous;
+  }
 }
 
 describe('TrustStore (js/platform/security/trust-store.js)', () => {
@@ -46,6 +70,7 @@ describe('TrustStore (js/platform/security/trust-store.js)', () => {
       expect(typeof TrustStore.isRevoked).toBe('function');
       expect(typeof TrustStore.getRevocation).toBe('function');
       expect(typeof TrustStore.listRevoked).toBe('function');
+      expect(typeof TrustStore.systemSignatureTier).toBe('function');
       expect(window.TrustStore).toBe(TrustStore);
     });
   });
@@ -65,6 +90,57 @@ describe('TrustStore (js/platform/security/trust-store.js)', () => {
         id: 'astro-system-signing-v1',
         publicKey: { kty: 'OKP', crv: 'Ed25519' },
       });
+    });
+
+    it('anchors the System entry at the committed AOSP-style test key and reports test-keys (the fresh-clone/fork story)', () => {
+      // The 2026-11-12 audit (F1) first rotation deleted the committed key
+      // and required env keys, which broke forks. The Android/AOSP model
+      // committed a deliberately-public test pair instead: the default
+      // anchor must be its public half, so default builds verify as
+      // System-signed everywhere. See astro-os/keys/README.md.
+      const testKey = JSON.parse(nodeFs.readFileSync(nodePath.resolve(__dirname, TEST_KEY_PATH), 'utf8'));
+      const system = TrustStore.list()[1];
+      expect(system.publicKey.x).toBe(testKey.x);
+      expect(system.tier).toBe('test');
+      expect(TrustStore.systemSignatureTier()).toBe('test-keys');
+    });
+
+    it('swaps in the server-injected release key (nova-system-signing-jwk meta) and reports release-keys', () => {
+      const { generateKeyPairSync } = require('node:crypto');
+      const { publicKey } = generateKeyPairSync('ed25519');
+      const releaseJwk = publicKey.export({ format: 'jwk' });
+
+      withSystemKeyMeta(JSON.stringify(releaseJwk), () => {
+        const rotated = requireFresh(TRUST_STORE_PATH);
+        const system = rotated.list()[1];
+        expect(system.publicKey.x).toBe(releaseJwk.x);
+        expect(system.publicKey.x).not.toBe(
+          JSON.parse(nodeFs.readFileSync(nodePath.resolve(__dirname, TEST_KEY_PATH), 'utf8')).x
+        );
+        expect(system.tier).toBe('release');
+        expect(rotated.systemSignatureTier()).toBe('release-keys');
+        // The general trusted-signing entry is untouched by the rotation.
+        expect(rotated.list()[0].publicKey.x).toBe('Id_PakcUqjCM2k3i7mSkQy7LadrM_PwVz9S1ikYAzEY');
+      });
+
+      // Without the meta (default state) the test key is back.
+      const fresh = requireFresh(TRUST_STORE_PATH);
+      expect(fresh.systemSignatureTier()).toBe('test-keys');
+    });
+
+    it('keeps the default test-key anchor when the injected meta is malformed', () => {
+      for (const bad of [
+        'not json at all',
+        JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'abc' }),
+        JSON.stringify({ kty: 'OKP', crv: 'Ed25519' }),
+        '',
+      ]) {
+        withSystemKeyMeta(bad, () => {
+          const fresh = requireFresh(TRUST_STORE_PATH);
+          expect(fresh.systemSignatureTier()).toBe('test-keys');
+          expect(fresh.list()[1].tier).toBe('test');
+        });
+      }
     });
 
     it('list() returns a copy of the array — structural tampering cannot touch the store', () => {

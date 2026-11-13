@@ -69,14 +69,21 @@ const ipThrottle = new Map();
  * @returns {string}
  */
 function getClientIP(req) {
-    // Check for trusted proxy headers
-    const trusted = config.trustedProxies.includes(req.ip) ||
-        config.trustedProxies.includes(req.socket.remoteAddress);
-
-    if (trusted) {
-        const forwarded = req.headers['x-forwarded-for'];
-        if (forwarded) {
-            return forwarded.split(',')[0].trim();
+    // SECURITY (2026-11-12 audit, finding L4): X-Forwarded-For was trusted
+    // whenever the DIRECT peer was loopback — but this server's peers are
+    // ALWAYS loopback (it binds 127.0.0.1), which made the header fully
+    // spoofable by any local process (fake audit IPs, IP-block evasion).
+    // Header trust now requires an explicit deployment opt-in: set
+    // TRUST_X_FORWARDED_FOR=1 only when the server genuinely runs behind a
+    // reverse proxy whose XFF you control.
+    if (process.env.TRUST_X_FORWARDED_FOR === '1') {
+        const trusted = config.trustedProxies.includes(req.ip) ||
+            config.trustedProxies.includes(req.socket.remoteAddress);
+        if (trusted) {
+            const forwarded = req.headers['x-forwarded-for'];
+            if (forwarded) {
+                return forwarded.split(',')[0].trim();
+            }
         }
     }
 
@@ -225,11 +232,6 @@ function csrfProtection(req, res, next) {
         return next();
     }
 
-    // Driver installation API — part of first-time OS setup, no CSRF tokens available yet
-    if (req.path.startsWith('/api/drivers/')) {
-        req.csrfSkip = true;
-        return next();
-    }
 
     // Check for CSRF token
     const token = req.headers['x-csrf-token'] ||

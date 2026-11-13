@@ -1,0 +1,11 @@
+{
+  "id": "com.astroos.service.session",
+  "name": "Session Manager",
+  "author": "jameswilloton230-ops",
+  "description": "Owns account sessions: login, lock, unlock, fast user switching, per-user storage mounting, and the account lifecycle events the shell subscribes to.",
+  "version": "3.0.2",
+  "entry": "service.js",
+  "unrestrictedEntry": "service.js",
+  "system": true,
+  "systemService": true
+}

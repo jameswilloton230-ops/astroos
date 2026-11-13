@@ -96,6 +96,19 @@ const AppSecrets = (() => {
       && key === key.trim();
   }
 
+  // ── Per-user namespace (multi-user) ───────────────────────────────────
+  // Secrets live at <uid>/<appId>/<name> inside app-secrets.json under the
+  // same machine master key (per-user key wrapping arrives with the
+  // encryption phase, not before — the hardening is incremental). Legacy
+  // single-user machines keep the flat <appId> addressing byte-for-byte.
+  function secretNamespace(appId) {
+    if (typeof NovaUserScope !== 'undefined' && NovaUserScope?.enabled?.()) {
+      const owner = String(NovaUserScope.ownerUid() || '');
+      if (owner) return `${owner}/${appId}`;
+    }
+    return String(appId);
+  }
+
   function loadStore() {
     if (memoryStore) return memoryStore;
     if (!fsMod || !pathMod) return { version: 1, apps: {} };
@@ -161,7 +174,7 @@ const AppSecrets = (() => {
     if (typeof appId !== 'string' || !appId || appId.includes(':')) return { ok: false, code: 'INVALID_ARGS', message: 'invalid appId' };
 
     const state = loadStore();
-    const record = state.apps[appId] || (state.apps[appId] = {});
+    const record = state.apps[secretNamespace(appId)] || (state.apps[secretNamespace(appId)] = {});
     const replacing = Object.prototype.hasOwnProperty.call(record, key);
     if (!replacing && Object.keys(record).length >= MAX_PER_APP) {
       return { ok: false, code: 'RATE_LIMITED', message: `Max ${MAX_PER_APP} secrets per app` };
@@ -183,7 +196,7 @@ const AppSecrets = (() => {
   function get(appId, key) {
     if (typeof appId !== 'string' || !appId || !validSecretKey(key)) return null;
     const state = loadStore();
-    const record = state.apps[appId];
+    const record = state.apps[secretNamespace(appId)];
     const blob = record ? record[key] : null;
     if (!blob || typeof blob !== 'object') return null;
     return decrypt(blob);
@@ -195,7 +208,7 @@ const AppSecrets = (() => {
   function del(appId, key) {
     if (typeof appId !== 'string' || !appId || !validSecretKey(key)) return false;
     const state = loadStore();
-    const record = state.apps[appId];
+    const record = state.apps[secretNamespace(appId)];
     if (!record || !Object.prototype.hasOwnProperty.call(record, key)) return false;
     delete record[key];
     saveStore(state);
@@ -209,7 +222,7 @@ const AppSecrets = (() => {
   function keys(appId) {
     if (typeof appId !== 'string' || !appId) return [];
     const state = loadStore();
-    const record = state.apps[appId];
+    const record = state.apps[secretNamespace(appId)];
     return record ? Object.keys(record).sort() : [];
   }
 

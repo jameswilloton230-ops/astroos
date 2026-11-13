@@ -49,6 +49,10 @@ const LAUNCHPAD_ORDER = Object.freeze([
   'com.astroos.music',        // Music
 ]);
 
+const HIDDEN_FROM_LAUNCHPAD = new Set([
+  'com.astroos.setup',
+]);
+
 function launchpadRank(app) {
   // Three tiers so an unbundled system app can't collide with a user app on
   // the same fallback rank: pinned system apps first (by list order), then
@@ -111,34 +115,6 @@ function _highlightMatches(target, text, query) {
 // LAUNCHPAD
 
 document.getElementById('start-btn')?.addEventListener('click', toggleLaunchpad);
-const powerActions = document.getElementById('launchpad-power-actions');
-if (powerActions) {
-  const isLinux = typeof process !== 'undefined' && process.platform === 'linux';
-  powerActions.style.display = isLinux ? 'flex' : 'none';
-  document.getElementById('restart-system-btn')?.addEventListener('click', () => requestSystemPowerAction('restart'));
-  document.getElementById('poweroff-system-btn')?.addEventListener('click', () => requestSystemPowerAction('poweroff'));
-}
-
-async function requestSystemPowerAction(action) {
-  const isRestart = action === 'restart';
-  const confirmed = await showModal(
-    isRestart ? 'Restart AstroOS?' : 'Power off AstroOS?',
-    isRestart ? 'The system will close running apps and restart.' : 'The system will close running apps and power off.',
-    [{ label: 'Cancel' }, { label: isRestart ? 'Restart' : 'Power off', danger: true, value: 'confirm' }]
-  );
-  if (confirmed !== 'confirm') return;
-  try {
-    const power = window.AstroOSSystem?.hardware?.power;
-    const run = action === 'restart' ? power?.restart
-      : action === 'poweroff' ? power?.powerOff
-        : null;
-    if (typeof run !== 'function') throw new Error('Astro System power API is unavailable');
-    await run();
-  } catch (error) {
-    console.error('[Launcher] System power action failed:', error);
-    Notify.show({ title: 'Power action failed', body: error.message, type: 'error', appName: 'System' });
-  }
-}
 
 function toggleLaunchpad() {
   const launchpad = document.getElementById('launchpad');
@@ -181,7 +157,7 @@ function renderLaunchpad() {
   if (!grid) return;
   const devMode = getLauncherDeveloperMode();
   const apps = (devMode ? APP_REGISTRY : APP_REGISTRY.filter(app => !app.devOnly))
-    .filter(app => app.id !== 'com.astroos.launcher');
+    .filter(app => app.id !== 'com.astroos.launcher' && !HIDDEN_FROM_LAUNCHPAD.has(app.id));
   // Stable sort: pinned order first, everything else alphabetical. This keeps
   // the grid layout consistent across reloads instead of tracking module
   // load order, which drifts whenever a hot-reload reorders registration.
@@ -2024,7 +2000,15 @@ if (desktopEl) {
   });
 
 
-OS.events.on('settings:changed', ({ key }) => {
+// The launcher script is re-evaluated for every account mount (log off →
+// log back in, fast user switch): OS.events has no per-script teardown, so
+// an unguarded registration would stack one more settings:changed listener
+// per launcher run. The handler only ever resolves its targets through
+// document.getElementById and OS.settings at call time, so the first
+// wiring keeps serving every future launcher DOM — wire it exactly once.
+if (!window.__launcherSettingsWired) {
+  window.__launcherSettingsWired = true;
+  OS.events.on('settings:changed', ({ key }) => {
   switch (key) {
     case 'taskbarSize':
     case 'taskbarPosition':
@@ -2130,6 +2114,7 @@ OS.events.on('settings:changed', ({ key }) => {
       break;
   }
 });
+}
 
   const MAX_WORKSPACES = 9;
 

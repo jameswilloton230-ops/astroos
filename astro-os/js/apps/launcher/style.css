@@ -470,11 +470,11 @@
     line-height: 1.3;
   }
 
-  /* User/power menu — drops up from the tray. */
+  /* Power menu. A popover, so the browser handles outside-click and Escape. */
   .tray-menu {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    right: 8px;
+    position: fixed;
+    inset: auto 8px calc(var(--taskbar-height) + 8px) auto;
+    margin: 0;
     min-width: 200px;
     background: var(--bg-elevated);
     border: 1px solid var(--border);
@@ -484,23 +484,31 @@
     display: none;
     flex-direction: column;
     gap: 2px;
-    z-index: 10000;
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
   }
-  .tray-menu.show {
+  .tray-menu:popover-open {
     display: flex;
   }
   .tray-menu-item {
     display: flex;
     align-items: center;
     gap: 10px;
+    width: 100%;
     padding: 10px 12px;
+    border: none;
     border-radius: 8px;
+    background: transparent;
+    font: inherit;
+    text-align: left;
     cursor: pointer;
     color: var(--text-primary);
     font-size: 13px;
     transition: background var(--t-fast);
+  }
+  .tray-menu-item[hidden],
+  .tray-menu-separator[hidden] {
+    display: none;
   }
   .tray-menu-item:hover {
     background: var(--accent-muted);
@@ -605,31 +613,6 @@
     width: 90%;
     justify-content: center;
     position: relative;
-  }
-  .launchpad-power-actions {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-    margin: 32px 0 0;
-  }
-  .launchpad-power-btn {
-    min-height: 40px;
-    padding: 8px 16px;
-    border: 1px solid var(--border);
-    border-radius: var(--r-sm);
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--text-primary);
-    font: inherit;
-    cursor: pointer;
-  }
-  .launchpad-power-btn:hover {
-    background: var(--accent-muted);
-  }
-  .launchpad-power-btn.danger {
-    color: var(--text-danger);
-  }
-  .launchpad-power-btn.danger:hover {
-    background: rgba(248, 81, 73, 0.16);
   }
   .launchpad-item {
     display: flex;

@@ -438,7 +438,7 @@ const MyAppsManager = (() => {
                     align-items: center;
                     justify-content: center;
                     font-size: 20px;
-                  " data-app-id="${app.id}" data-app-icon="${app.icon || ''}">${/^data:|^https?:\/\//i.test(app.icon || '') ? '' : (app.icon || '📱')}</div>
+                  " data-app-id="${escapeHtml(app.id)}" data-app-icon="${escapeHtml(app.icon || '')}">${/^data:|^https?:\/\//i.test(app.icon || '') ? '' : escapeHtml(app.icon || '📱')}</div>
                   <div>
                     <h3 style="color: #e6edf3; font-size: 14px; margin: 0;">${escapeHtml(app.name)}</h3>
                     <p style="color: #8b949e; font-size: 12px; margin: 0;">v${escapeHtml(app.version)}</p>
@@ -510,7 +510,16 @@ const MyAppsManager = (() => {
           : ext === 'webp' ? 'image/webp'
           : ext === 'ico' ? 'image/x-icon'
           : 'image/png';
-        el.innerHTML = `<img src="data:${mime};base64,${encoded}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;pointer-events:none;" draggable="false">`;
+        // base64 bodies cannot break out of the attribute, and `raw` is
+        // HTML-escaped when written into data-app-icon above, but never
+        // interpolate package-controlled strings raw into innerHTML:
+        // build the node through the DOM API instead of a template.
+        const img = document.createElement('img');
+        img.src = `data:${mime};base64,${encoded}`;
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:8px;pointer-events:none;';
+        img.draggable = false;
+        img.alt = '';
+        el.replaceChildren(img);
       }
     });
 
@@ -595,7 +604,7 @@ const MyAppsManager = (() => {
             justify-content: center;
             font-size: 40px;
             flex-shrink: 0;
-          ">${app.icon || '📱'}</div>
+          ">${escapeHtml(app.icon || '📱')}</div>
           
           <div>
             <h1 style="color: #e6edf3; font-size: 24px; margin: 0 0 8px 0;">${escapeHtml(app.name)}</h1>

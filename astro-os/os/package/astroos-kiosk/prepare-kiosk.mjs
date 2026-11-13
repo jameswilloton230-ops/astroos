@@ -36,14 +36,28 @@ manifest.window = {
     "--no-first-run",
     "--disable-devtools",
     "--allow-insecure-localhost",
+    "--class=com.novabyte.os",
     "--enable-features=UseOzonePlatform",
     "--ozone-platform=x11",
     "--use-gl=angle",
     "--use-angle=gl",
-    "--disable-features=Vulkan",
+    "--disable-features=Vulkan,Translate,AutofillServerCommunication",
     "--ignore-gpu-blocklist",
     "--enable-gpu-rasterization",
     "--enable-zero-copy",
+    // Kiosk lockdown: no Chromium-owned UI popups.
+    //  * hide-crash-restore-bubble — no "Restore pages?" bubble after a crash
+    //  * deny-permission-prompts   — websites' notification/camera/mic prompts
+    //                                are auto-denied instead of popping up
+    //    (screenshots use the NW.js getDisplayMedia path, not permission
+    //    prompts, so they keep working)
+    //  * password-store=basic      — never touch the OS keyring
+    //  * no-default-browser-check  — no default-browser infobar
+    "--hide-crash-restore-bubble",
+    "--deny-permission-prompts",
+    "--password-store=basic",
+    "--no-default-browser-check",
+    "--disable-component-update",
     "--user-data-dir=/home/astroos/.config/novabyte",
   ].join(" "),
 };

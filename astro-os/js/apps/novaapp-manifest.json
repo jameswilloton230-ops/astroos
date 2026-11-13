@@ -2,261 +2,302 @@
   {
     "id": "com.astroos.appmanager",
     "file": "js/apps/com.astroos.appmanager.novaapp",
-    "cacheKey": "d45dc3d098e9997066bef73c2bc3cdd6ae91be492ba55bb62d2032c68c430dac"
+    "cacheKey": "58668e08e915cb3101c4eaa87305a00ca015d47ca079d5637c0544c024c07c14"
   },
   {
     "id": "com.astroos.browser",
     "file": "js/apps/com.astroos.browser.novaapp",
-    "cacheKey": "b5ca06c70231ea2fd200f5392ae15ad003cbd1ae6294516f142b4700734e2b0d"
+    "cacheKey": "1a4199c2042c04104ebf5089eab29bb39a2d7c780c08bb674527f4837669619e"
   },
   {
     "id": "com.astroos.calculator",
     "file": "js/apps/com.astroos.calculator.novaapp",
-    "cacheKey": "c93510e48ded6a8cb1bc20a238ce0fee8ad6eb8bcc5937cc14a24a32576a6fce"
+    "cacheKey": "cc1e2cbc9239226301ef86767945d2707152e6e7c02d3d57dda99fe21f72802b"
   },
   {
     "id": "com.astroos.calendar",
     "file": "js/apps/com.astroos.calendar.novaapp",
-    "cacheKey": "49754825520553652262b916d1c13667c2c88de1cdbf29ac9ebae85067a3eec7"
+    "cacheKey": "7a5c16d77e986ee62fc868cdb1bda804ad7d0e645bc6dec01a02210b139eb63c"
   },
   {
     "id": "com.astroos.clock",
     "file": "js/apps/com.astroos.clock.novaapp",
-    "cacheKey": "5443bf4698576c239a9531afdff5557da3b6a15a10ca1a42e0bd5ec86e708f15"
+    "cacheKey": "655762a8032abe1d9a9a5a3193137e32ea6311191085df05347e66c8c6eaaaf0"
   },
   {
     "id": "com.astroos.contacts",
     "file": "js/apps/com.astroos.contacts.novaapp",
-    "cacheKey": "08b2f2bf53b4e465bca09d23c350ea1c9202b10785a5415878b394b9b38be08d"
+    "cacheKey": "98a012d7072064e0f943a85d15ca95253a6cc3c19ad22677a55575105063427a"
   },
   {
     "id": "com.astroos.devconsole",
     "file": "js/apps/com.astroos.devconsole.novaapp",
-    "cacheKey": "607e8afd345cc40174427f07b357cfc5d907e64e921a5ac7d61126b8262d2007"
+    "cacheKey": "6cda0e551ba01b59a457f1a0abfea88d65e7a77d18cf081c217a870f22c4c192"
   },
   {
     "id": "com.astroos.downloads",
     "file": "js/apps/com.astroos.downloads.novaapp",
-    "cacheKey": "fde4bcea957fae8a446481fa2104d5e881c638cfad018a6896d4a8c6974603c7"
+    "cacheKey": "211cdcaf101e5bae481afcf3fa3eafb6ef6aea8394d6da419f932d5fecc10760"
   },
   {
     "id": "com.astroos.email",
     "file": "js/apps/com.astroos.email.novaapp",
-    "cacheKey": "a78e8f443f6cbb48ec969219cfb81f764c8722c4977e4010b475fa8ebab2dd75"
+    "cacheKey": "8414ce0b809ce3b3556f3952132e00462ee1b999dbb00a196c166110f34dd708"
   },
   {
     "id": "com.astroos.events",
     "file": "js/apps/com.astroos.events.novaapp",
-    "cacheKey": "99c9e43ecfddd48ca81ad3a2b0e11b4b8366cf8e364863160e07b91ded42bcf0"
+    "cacheKey": "0902f1381f7f8ef81d4b7c7a73fd465c314480e9cb7c589a2de4c53136ddccce"
   },
   {
     "id": "com.astroos.gallery",
     "file": "js/apps/com.astroos.gallery.novaapp",
-    "cacheKey": "6db3b08a4fe07c36611e81529322f06b6d434d31645bed7db563a02d7a0aea25"
+    "cacheKey": "0a5e3f99f46a0f9f0decf89b8baa12f7b32c202194d573562bfcca32acc53bc7"
   },
   {
     "id": "com.astroos.inspector",
     "file": "js/apps/com.astroos.inspector.novaapp",
-    "cacheKey": "7aa1166fdfba294af94abe3bb45fdb72810380c70a1bc6dc06fe73afc87c7d05"
+    "cacheKey": "6a893d631dab938fd8f27a213cabce3fab19b0f808a016e1cd6dfc944e1d6d65"
   },
   {
     "id": "com.astroos.install",
     "file": "js/apps/com.astroos.install.novaapp",
-    "cacheKey": "4a2e4237f2d7b1fd269d9a83d0e1921697ee122760adc709b1564b3945eea833"
+    "cacheKey": "ad271b64537ff672089a8f53d74fca9cde289ada46a044a274101cd2121ccdb2"
   },
   {
     "id": "com.astroos.modules",
     "file": "js/apps/com.astroos.modules.novaapp",
-    "cacheKey": "67ab866172660e08d8a26d0160e3fb741a2bd616c92831e17ea2ae57e10ca634"
+    "cacheKey": "f67854a9f58c3b498e273486e90584c151efa047bac7e4f352f62c850094fe6d"
   },
   {
     "id": "com.astroos.music",
     "file": "js/apps/com.astroos.music.novaapp",
-    "cacheKey": "b1ead59cdc852235fc198642143d777aecc099f7c1ae7dd3f7b0fda8548bb1b0"
+    "cacheKey": "b1761dcc069475792a50aa64af96b40fe8961de8d3b2529ccb8876554df527ee"
   },
   {
     "id": "com.astroos.packages",
     "file": "js/apps/com.astroos.packages.novaapp",
-    "cacheKey": "dec451efb6f1b15146e424747908911eb7f227f6b114d5294130157ddfbbf4c0"
+    "cacheKey": "08338688bd9ea658369fed50e78ea3165a789f5f4e7533d1399e9bb7a42055a0"
   },
   {
     "id": "com.astroos.perf",
     "file": "js/apps/com.astroos.perf.novaapp",
-    "cacheKey": "20ed3ff49588890e452ba3ef64c3d74ea44c6fe295eacc933b823f2c9e506b28"
+    "cacheKey": "dd280df782ed37649d30e5b8ab0d2d84fd3d92bcb52cabfe2df3873e0e03bd94"
   },
   {
     "id": "com.astroos.permissions",
     "file": "js/apps/com.astroos.permissions.novaapp",
-    "cacheKey": "4175f128ce5ca9a1ccfa08eb303f1ea527d411cd72e32529b368328f8aa84531"
+    "cacheKey": "41c8df83a2f0c42976a56204abcb9c2d78e4bc2d38a62265d17394072ecd679e"
   },
   {
     "id": "com.astroos.textedit",
     "file": "js/apps/com.astroos.textedit.novaapp",
-    "cacheKey": "1966d0f4c7ed3376b4d0755edeb3f8fd29a9f3d56240f021bed9727003effc2c"
+    "cacheKey": "7bd232258686477fd42665998399731bfa1cbc738c4a3a03783f4b53a931b254"
   },
   {
     "id": "com.astroos.search",
     "file": "js/apps/com.astroos.search.novaapp",
-    "cacheKey": "3f2a747e90c744426e26cb7d187ab251b7be7a08377e4e6968d73d362110af16"
+    "cacheKey": "dfff82408f8779d95a5d8cb7237316f48b1944135d451a256630fd5b2b395057"
   },
   {
     "id": "com.astroos.settings",
     "file": "js/apps/com.astroos.settings.novaapp",
-    "cacheKey": "53069fa0fee45a2eb34dbac727ea560f0ec7c1b54470adb13c500b17ed93e756"
+    "cacheKey": "b11ea33adb6d0e2ecc0dc144ca9b005e32b421879da227b3148d4f06c392d6b1"
   },
   {
     "id": "com.astroos.terminal",
     "file": "js/apps/com.astroos.terminal.novaapp",
-    "cacheKey": "1427729a57cd19a864e11d42ab8ba4825cb7128c8279f1497edc417c40b89120"
+    "cacheKey": "0bf411361d61b3e01f22adeadb17c6835c4d40938eed0a1a78f96b9d391eb1c0"
   },
   {
     "id": "com.astroos.sysaccess",
     "file": "js/apps/com.astroos.sysaccess.novaapp",
-    "cacheKey": "59bfecaa00499502bde22e1938553d80d22be41d7a6e645153df51b900a2892f"
+    "cacheKey": "41650cfa4c93e8ee5ac3f4e48b42b3bdfb3b8de79d69ea49b51a2f04ac48dee5"
   },
   {
     "id": "com.astroos.files",
     "file": "js/apps/com.astroos.files.novaapp",
-    "cacheKey": "386368e9dd0ef599639ac2d744810aa2043decfd294bfd3304d7986ed3bfda15"
+    "cacheKey": "e86b8ac9660279cec6001ad6566f800640b516cb6be760d00f6103616370eb34"
   },
   {
     "id": "com.astroos.store",
     "file": "js/apps/com.astroos.store.novaapp",
-    "cacheKey": "1b1e388bb1c1b3b3aa2525913fbe27c9a687d15b46aa96a1db2bcbd1d4a1c20a"
+    "cacheKey": "ffce7ca9f46bc5956059797cac1b9b44c1d412d7b18fa8862019d594b9356f85"
   },
   {
     "id": "com.astroos.service.app-loader-optimiser",
     "file": "js/apps/com.astroos.service.app-loader-optimiser.novaapp",
-    "cacheKey": "2010b38ae36397545ca79c2049b8bd9b9833fee3b773ef4301173218e077ab91"
+    "cacheKey": "f87d9da24ead692defc804e6b87b99a232a7a001f812d5ab58c1f622f7b73251",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.background-apps",
     "file": "js/apps/com.astroos.service.background-apps.novaapp",
-    "cacheKey": "6d9ccaf1014e0f6d6f558b0a5d0bdbe745e22c6bfca23d217373c88985d63fdb"
+    "cacheKey": "891066031d43f02772cc7a433ee4c84f6b375996bba883b2ceb627c3a8bbb83c",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.calendar-notifier",
     "file": "js/apps/com.astroos.service.calendar-notifier.novaapp",
-    "cacheKey": "c1298bb4dd74008d97e131b1cae721c216993dc9b1c83c10addea0cf0e6138d5"
+    "cacheKey": "d7b7e422aab08381b7d434a3ac79e0fae401cc0e44ea009f92315823a10078c6",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.debug-overlay",
     "file": "js/apps/com.astroos.service.debug-overlay.novaapp",
-    "cacheKey": "993ffdbb07dcbc02e1b6696896d35ada94e69b11da5584c620a832a12de3dd9a"
+    "cacheKey": "4b57e213c9d7c196f898b4510b7cff52cc755dcb45cfc40cf0ea66267330cb09",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.default-apps",
     "file": "js/apps/com.astroos.service.default-apps.novaapp",
-    "cacheKey": "8e8e0000449a391726fa26348aa58ceee7c74143f999090d2eadccb1525f2cd3"
+    "cacheKey": "4948093ef6ba39b190f9079032fa847332740a7cabf7cc91b7c703553d2bbca5",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.downloads-history",
     "file": "js/apps/com.astroos.service.downloads-history.novaapp",
-    "cacheKey": "2ce6466550c934e6066b7a1ea5762cea0b8e8e632ca23a8c9e5ff942dd2a8698"
+    "cacheKey": "cf62f1dcde82b75ec8714b00280d27dc1687262f288e457dd62848714b5e920f",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.event-log",
     "file": "js/apps/com.astroos.service.event-log.novaapp",
-    "cacheKey": "8126ad8f6511035bb530b722fb376976f0de2b4744ba33775a8bf4ef5db2ce6a"
+    "cacheKey": "afe96b47a559a5633250e4b8c2d9d1ffe77854366b7c3c80712cedb96a8a66de",
+    "systemService": true
   },
   {
     "id": "com.astroos.launcher",
     "file": "js/apps/com.astroos.launcher.novaapp",
-    "cacheKey": "e0ab20082652313aea7e46051559cfa540a793cdca3c368140a1aa13c558cd65"
+    "cacheKey": "4df12f72f0bcda23a605fa9fc85122408bd2f883bd6046ade685dee7f6e75cf9"
   },
   {
     "id": "com.astroos.service.lock-screen",
     "file": "js/apps/com.astroos.service.lock-screen.novaapp",
-    "cacheKey": "429e0011da95bf08493657cd0f3e8dc981a7657e404957ed92775b7e1d8fac42"
+    "cacheKey": "baa7fb2aa497bd1f9ca284f7f5fccbb42e33e202c6dd220785a36047d6bd60c2",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.network-activity-log",
     "file": "js/apps/com.astroos.service.network-activity-log.novaapp",
-    "cacheKey": "8198f2fda5d4df6a9537c19347cf589db36e4b02dc7a767c4f0cd007dcb7f004"
+    "cacheKey": "bd945a6f7ecf94e6dec5d03fc503591ff3387c34c216ba6e5759fcb2db6ac86b",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.notifications",
     "file": "js/apps/com.astroos.service.notifications.novaapp",
-    "cacheKey": "4f0eb08d934b4573ce8d843aab29681f32656a3ef0320a236310a2042ea75a0e"
+    "cacheKey": "ce7b10eb11f9001dd0c1402e5f7d1172c1528915fa003d2604776c805ca91c17",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.registry",
     "file": "js/apps/com.astroos.service.registry.novaapp",
-    "cacheKey": "8579a9c7fa2467c9dda28f8355c791aed1ed42b4bd945fad86dbf2c5263b4a3e"
+    "cacheKey": "47271c2b27f1965fc5643957aecd7ee269d7228ee29ae15f123595b14995671d",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.scanner",
     "file": "js/apps/com.astroos.service.scanner.novaapp",
-    "cacheKey": "5bdf25098ed5d2cf7ff99ac5b03a0f6ea575efe530444e6d1af7198503b1f910"
+    "cacheKey": "08574bcb67d00fd7060cb53131c0ae6445c557aeded00449b1bbb8434cd843b9",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.screenshots",
     "file": "js/apps/com.astroos.service.screenshots.novaapp",
-    "cacheKey": "d7c854476014abd7626690b0891fe8592c7a847d858257d7c864067292e09a2e"
+    "cacheKey": "bda23ab6465a63684a4eaeec0d4ec87fbd1fbc2c88723b923e8739a4d758c5bc",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.search-index",
     "file": "js/apps/com.astroos.service.search-index.novaapp",
-    "cacheKey": "604f0ab6dbc0aa64a5a6059b299e604c95f77a725906a43f61db6271fc99b499"
+    "cacheKey": "4c7b717373698bfff85f3e9d3f20b4fff4c8e9ddb9bd9680b2590bb6faf43e32",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.server-events-bridge",
     "file": "js/apps/com.astroos.service.server-events-bridge.novaapp",
-    "cacheKey": "1398f26f34fd5c5cf5e537255f536bf2901500af167855e27275567fda4474d5"
+    "cacheKey": "3ff6143ba9aedaf7559d9a5f6f629ff292d98d88d88eba1e2fad90cc4da586c4",
+    "systemService": true
   },
   {
     "id": "com.astroos.shell-ui",
     "file": "js/apps/com.astroos.shell-ui.novaapp",
-    "cacheKey": "56250c2a111b7ce9adaddbceb37d8854f194624665dab98c0026058c3eab0d32"
+    "cacheKey": "dd1103307a5d82c834da27f7e38b5ebc05bf84f46ac2c672b7427a5b18d9e045",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.store-updates",
     "file": "js/apps/com.astroos.service.store-updates.novaapp",
-    "cacheKey": "3e60469a239dc95f4e1169f37ee57fa37c5fba2db70647819d43c89a127094fa"
+    "cacheKey": "a691dfde79cb5fbd3165c9648d2a41beec19cbcc2d508f76b0c3ab59b9a52530",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.system-dialogs",
     "file": "js/apps/com.astroos.service.system-dialogs.novaapp",
-    "cacheKey": "20056ba629151a878ce32e1e280c40ae51a9a33868ab497ff8c69ff6a1901fdf"
+    "cacheKey": "73e8ec8fd9237ea7a924068bcdef24561ede429dd03132102cb2b59dd7c06352",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.system-events",
     "file": "js/apps/com.astroos.service.system-events.novaapp",
-    "cacheKey": "c01b662b25966f9e68c73492084a59a07fd8cd5fab875a39390617e3cf2213e4"
+    "cacheKey": "f4c191faed405b2fd6f0d177f61001cab520f331ba2e48642ed13121b583486c",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.tray",
     "file": "js/apps/com.astroos.service.tray.novaapp",
-    "cacheKey": "7a1a772375a2c23701c8837a5085019b4dbfe01054c1d5e8eb552075b43dfd22"
+    "cacheKey": "43be8558a837b2cf22d1f5e371f92dc8e56885de9487acc10f2ff28efe8c494f",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.wallpaper",
     "file": "js/apps/com.astroos.service.wallpaper.novaapp",
-    "cacheKey": "a134f7b29dc26dbd4cb15bf9b25eeaf20dd5f6161fae9e9e8e71a17e5ef9b5db"
+    "cacheKey": "a8da4be52f8d7e8fa4e679cdd1a7441ab64639e01431855a829649c7c695cdaa",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.system-webview",
     "file": "js/apps/com.astroos.service.system-webview.novaapp",
-    "cacheKey": "4e10004e1b0e267cd98284f5199a6d69c46d663c872c90316ed62c2c99ff5667"
+    "cacheKey": "05d27519afa9289f69b907addc8cbf9cad0e1f4692fbd66ccf695db014e5fb04",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.astro-system",
     "file": "js/apps/com.astroos.service.astro-system.novaapp",
-    "cacheKey": "5b93925a6d3fa96f347a2e64ede43a306646f024385de65eee78f3f7857af340"
+    "cacheKey": "0f9193a3f8470ebe307d791025c963cfce45dee3869d78a31dec35dd98affa48",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.easteregg",
     "file": "js/apps/com.astroos.service.easteregg.novaapp",
-    "cacheKey": "3cd5cd34427110f59ce1af694fb7927f746815ed6077669d275ffe530ec7a174"
+    "cacheKey": "495807a5b63ada070225ffe76d2efe36f7bfb5d4f87079798d33289420fb8c97",
+    "systemService": true
   },
   {
     "id": "com.astroos.service.media-store",
     "file": "js/apps/com.astroos.service.media-store.novaapp",
-    "cacheKey": "c4b995b1fa6de5a910160a26b6f14eeddc7d8682d8797c8383eb30f0cc5f04b3"
+    "cacheKey": "e7a10242338f2fb2462939b246705e606a80dacd83bae8cb1ebe7c5f6ce801c7",
+    "systemService": true
   },
   {
     "id": "com.astroos.novareg",
     "file": "js/apps/com.astroos.novareg.novaapp",
-    "cacheKey": "cea3f33bad2f85232c94a35ba68f9fdfbe34376f8c1ae87d1451f2ed10850061"
+    "cacheKey": "ea05ff27368d33ffc5f370462901f27e3bbe0ef3f8c0714802a0b9d754d41579"
+  },
+  {
+    "id": "com.astroos.service.session",
+    "file": "js/apps/com.astroos.service.session.novaapp",
+    "cacheKey": "4618b206fb98266d2197e6191ec23b2d5e3a1936c8cf810c012777483d79f578",
+    "systemService": true
+  },
+  {
+    "id": "com.astroos.users",
+    "file": "js/apps/com.astroos.users.novaapp",
+    "cacheKey": "ad74311ae258134e02508a0863eb1817d20177e0373bda6ff2f9c5001fda499c"
+  },
+  {
+    "id": "com.astroos.setup",
+    "file": "js/apps/com.astroos.setup.novaapp",
+    "cacheKey": "4e81ef370df7ef74d46b84ab5594e8d7d5e614adfdb08b7039912a3ebf5d024f"
   }
 ]

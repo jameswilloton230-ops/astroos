@@ -393,6 +393,20 @@
     return bytes;
   }
 
+  function isValidBase64(value) {
+    const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
+    const contentLength = value.length - padding;
+    if (padding === 2 && contentLength % 4 !== 2) return false;
+    if (padding === 1 && contentLength % 4 !== 3) return false;
+    if (!padding && contentLength % 4 === 1) return false;
+    for (let offset = 0; offset < contentLength; offset += 65536) {
+      if (!/^[A-Za-z0-9+/]+$/.test(value.slice(offset, Math.min(offset + 65536, contentLength)))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /**
    * Scan a raw base64 string directly against the real bytes it decodes
    * to — unlike scanText(), this doesn't round-trip through a JS string
@@ -403,7 +417,17 @@
   async function scanBase64(name, base64) {
     let bytes;
     try {
-      bytes = base64ToBytes(String(base64 ?? ''));
+      const value = String(base64 ?? '');
+      if (!isValidBase64(value)) {
+        throw new Error('Invalid base64');
+      }
+      const ext = extOf(name);
+      const textLike = RENDERED_TEXT_EXTENSIONS.has(ext) ||
+        ext === '' || ext === 'js' || ext === 'mjs' || ext === 'css' ||
+        ext === 'json' || ext === 'txt';
+      const maxBytes = textLike ? MAX_TEXT_SCAN_BYTES : MAX_SCAN_BYTES;
+      const sample = value.slice(0, Math.ceil(maxBytes / 3) * 4);
+      bytes = base64ToBytes(sample);
     } catch (_e) {
       return { safe: false, reason: `"${name}" is not valid base64 and could not be scanned.` };
     }

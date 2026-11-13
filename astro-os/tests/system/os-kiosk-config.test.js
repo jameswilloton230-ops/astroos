@@ -10,12 +10,31 @@ describe('AstroOS VMware kiosk device configuration', () => {
     const procMount = 'mounted /proc || mount -t proc proc /proc';
     const sysfsMount = 'mounted /sys || mount -t sysfs sysfs /sys';
     const deviceMount = 'mounted /dev/pts || mount -t devpts';
+    const tmpMount = 'mounted /tmp || mount -t tmpfs -o mode=1777,nosuid,nodev tmpfs /tmp';
 
-    expect(mounts).toContain('mkdir -p /proc /sys /dev/pts /dev/shm /tmp');
+    expect(mounts).toContain('mkdir -p /proc /sys /dev/pts /dev/shm /tmp /run');
     expect(mounts.indexOf(procMount)).toBeGreaterThanOrEqual(0);
     expect(mounts.indexOf(procMount)).toBeLessThan(mounts.indexOf(sysfsMount));
     expect(mounts.indexOf(sysfsMount)).toBeGreaterThanOrEqual(0);
     expect(mounts.indexOf(sysfsMount)).toBeLessThan(mounts.indexOf(deviceMount));
+    const runtimeMount = 'mounted /run || mount -t tmpfs -o mode=0755,nosuid,nodev tmpfs /run';
+    const runtimeDirectories = 'mkdir -p /run/lock/subsys /var/lock/subsys';
+    expect(mounts.indexOf(tmpMount)).toBeGreaterThanOrEqual(0);
+    expect(mounts.indexOf(tmpMount)).toBeLessThan(mounts.indexOf(runtimeMount));
+    expect(mounts.indexOf(runtimeMount)).toBeLessThan(mounts.indexOf(runtimeDirectories));
+    expect(mounts).toContain(runtimeDirectories);
+  });
+
+  it('seeds a runtime DNS file in /run so name resolution works before NetworkManager populates resolv.conf', () => {
+    const networkScript = readFileSync(
+      new URL('../../os/board/astroos/rootfs-overlay/etc/init.d/S41network', import.meta.url),
+      'utf8',
+    );
+
+    expect(networkScript).toContain('mkdir -p /run');
+    expect(networkScript).toContain('/run/resolv.conf');
+    expect(networkScript).not.toContain('/tmp/resolv.conf');
+    expect(networkScript).toContain('ln -sf /run/resolv.conf /etc/resolv.conf');
   });
 
   it('includes passwordless sudo in the booted root filesystem for NovaRoot', () => {
@@ -185,10 +204,6 @@ describe('AstroOS VMware kiosk device configuration', () => {
     const defconfig = readFileSync(new URL('../../os/configs/astroos_x86_64_defconfig', import.meta.url), 'utf8');
     const startup = readFileSync(new URL('../../os/board/astroos/S99astroos', import.meta.url), 'utf8');
     const build = readFileSync(new URL('../../os/build-iso.sh', import.meta.url), 'utf8');
-    const cagePatch = readFileSync(
-      new URL('../../os/patches/cage/0001-runtime-debug-logging.patch', import.meta.url),
-      'utf8',
-    );
 
     for (const option of [
       'BR2_PACKAGE_MESA3D_DEMOS=y',
@@ -198,35 +213,55 @@ describe('AstroOS VMware kiosk device configuration', () => {
       expect(defconfig).toContain(option);
     }
     expect(defconfig).toContain('BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_ASTROOS_PATH)/patches"');
-    expect(cagePatch).toContain('getenv("CAGE_DEBUG")');
     // GL debug is runtime-controlled: env override > kernel cmdline > off.
     expect(startup).toContain('if [ -z "$ASTROOS_GL_DEBUG" ]; then');
     expect(startup).toContain('*ASTROOS_GL_DEBUG=1*) ASTROOS_GL_DEBUG=1 ;;');
     expect(startup).toContain('*)                  ASTROOS_GL_DEBUG=0 ;;');
     expect(startup).toContain('WLR_XWAYLAND=/run/astroos-debug-bin/Xwayland');
     expect(startup).toContain('-verbose 10');
-    expect(startup).toContain('/home/astroos/astroos-gl-debug.log');
+    // GL debug output is machine state under /var/log/astroos — never in the
+    // kiosk user's home (the home root is the system area: ~/users trees +
+    // hidden dot-state only).
+    expect(startup).toContain('astroos_log_dir=/var/log/astroos');
+    expect(startup).toContain('GL_DEBUG_LOG="$astroos_log_dir/gl-debug.log"');
+    expect(startup).not.toContain('/home/astroos/astroos-gl-debug.log');
+    expect(startup).not.toContain('/home/astroos/astroos-kiosk.log');
     expect(startup).toContain('$chromium_gl_debug');
     expect(startup).toContain("'\"$gl_debug_env\"'");
     // Debug mode must not change which GL backend Chromium asks for, and
-    // cage's -d means "no client-side decorations", not debug.
+    // labwc gets debug logging via its own -d flag (no patch needed, unlike
+    // the retired cage setup whose -d meant "no client-side decorations").
     expect(startup).toContain('--use-angle=gl');
-    expect(startup).not.toMatch(/\/usr\/bin\/cage -d/);
+    expect(startup).toContain('labwc_debug_flag="-d"');
+    expect(startup).toContain('exec /usr/bin/labwc $labwc_debug_flag -C /etc/labwc');
     expect(build).toContain("grep -v '^BR2_PACKAGE_MESA3D_DEMOS='");
-    expect(build).toContain('cage-dirclean');
+    expect(build).toContain('labwc-dirclean');
   });
 
-  it('overrides Buildroot Xwayland with a build that works without wl_drm', () => {
+  it('uses Buildroot 2026.08.1 stock Xwayland and overrides wlroots for labwc', () => {
     const build = readFileSync(new URL('../../os/build-iso.sh', import.meta.url), 'utf8');
-    const mk = readFileSync(new URL('../../os/overrides/xwayland/xwayland.mk', import.meta.url), 'utf8');
-    const hash = readFileSync(new URL('../../os/overrides/xwayland/xwayland.hash', import.meta.url), 'utf8');
+    const defconfig = readFileSync(new URL('../../os/configs/astroos_x86_64_defconfig', import.meta.url), 'utf8');
+    const wlrootsMk = readFileSync(new URL('../../os/overrides/wlroots/wlroots.mk', import.meta.url), 'utf8');
+    const wlrootsPatch = readFileSync(
+      new URL('../../os/patches/wlroots/0001-dmabuf-tolerate-close-handle-failure.patch', import.meta.url),
+      'utf8',
+    );
 
-    // 23.2.4 requires wl_drm, which wlroots 0.18 (cage) does not advertise.
-    expect(mk).toMatch(/^XWAYLAND_VERSION = 24\.1\./m);
-    expect(mk).not.toContain('xwayland_eglstream');
-    expect(hash).toMatch(/sha256\s+[0-9a-f]{64}\s+xwayland-24\.1\./);
-    expect(build).toContain('overrides/xwayland');
-    expect(build).toContain('"$BUILDROOT_DIR/package/x11r7/xwayland/"');
-    expect(build).toContain('"$XWAYLAND_OVERRIDE_DIR/xwayland.mk"');
+    // Buildroot 2026.08.1 ships Xwayland 24.1.13 with a wl_drm-free glamor
+    // fix already included, so the old xwayland override is gone; wlroots is
+    // overridden to 0.20.2 because labwc 0.20.3 requires >= 0.20.1.
+    expect(build).toContain('BUILDROOT_VERSION="2026.08.1"');
+    expect(build).not.toContain('overrides/xwayland');
+    expect(build).not.toContain('overrides/host-m4');
+    expect(build).toContain('overrides/wlroots');
+    expect(build).toContain('"$BUILDROOT_DIR/package/wlroots/"');
+    expect(wlrootsMk).toMatch(/^WLROOTS_VERSION = 0\.20\.2$/m);
+    // The vmwgfx dmabuf close-handle tolerance patch is rebased for 0.20.x:
+    // close-handle failure is only logged (WLR_DEBUG), never fatal.
+    expect(wlrootsPatch).toContain('drmCloseBufferHandle');
+    expect(wlrootsPatch).toContain('wlr_log_errno(WLR_DEBUG');
+    expect(wlrootsPatch).not.toContain('+\t\t\treturn false');
+    expect(defconfig).toContain('BR2_PACKAGE_LABWC=y');
+    expect(defconfig).toContain('BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="7.3.4"');
   });
 });

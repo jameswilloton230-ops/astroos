@@ -1981,7 +1981,7 @@ registerApp({
     }
 
     // Streams a URL to disk with Node's http(s), so there's no CORS and no
-    // whole-file buffer in memory. Uses captured image request headers to
+    // whole-file buffer in memory. Uses captured request headers to
     // preserve hotlink/session access and only forwards credentials to the
     // original origin when following redirects.
     function streamUrlToFile(url, destPath, requestHeaders = {}, redirectsLeft = 5) {
@@ -2008,7 +2008,7 @@ registerApp({
             }
             return streamUrlToFile(next, destPath, nextHeaders, redirectsLeft - 1).then(resolve, reject);
           }
-          if (statusCode !== 200) {
+          if (statusCode < 200 || statusCode >= 300) {
             res.resume();
             return reject(new Error('HTTP ' + statusCode));
           }
@@ -2025,7 +2025,11 @@ registerApp({
           };
           res.on('data', chunk => { received += chunk.length; });
           res.on('error', fail);
+          res.on('aborted', () => fail(new Error('Download response was interrupted')));
           out.on('error', fail);
+          out.on('close', () => {
+            if (!failed && !out.writableFinished) fail(new Error('Download file was closed before completion'));
+          });
           out.on('finish', () => {
             if (failed) return;
             fs.rename(partPath, destPath, err => (err ? fail(err) : resolve(received)));
@@ -2047,8 +2051,8 @@ registerApp({
       }
     }
 
-    function getImageRequestHeaders(wv, url, pageUrl) {
-      const savedHeaders = wv?._nbImageRequestHeaders?.get(normalizeRequestUrl(url)) || {};
+    function getDownloadRequestHeaders(wv, url, pageUrl) {
+      const savedHeaders = wv?._nbDownloadRequestHeaders?.get(normalizeRequestUrl(url)) || {};
       const requestHeaders = { ...savedHeaders };
       if (!Object.keys(requestHeaders).some(name => name.toLowerCase() === 'referer') && pageUrl) {
         try {
@@ -2070,9 +2074,9 @@ registerApp({
     // Chromium's own download would open the host's native chooser, so the
     // permission handler denies it and routes the URL here for the OS Save As.
     async function saveDownloadViaDialog(url, requestedName, title = 'Save As', requestHeaders = {}) {
-      const isDataImage = /^data:image\/[a-z0-9.+-]+(?:;[^,]*)?,/i.test(url || '');
-      if (!url || (!/^https?:\/\//i.test(url) && !isDataImage)) {
-        Notify.show({ title: 'Download failed', body: 'This image URL cannot be saved directly.', type: 'error', appName: 'Downloads' });
+      const isDataUrl = /^data:/i.test(url || '');
+      if (!url || (!/^https?:\/\//i.test(url) && !isDataUrl)) {
+        Notify.show({ title: 'Download failed', body: 'Only HTTP(S) and data URLs can be saved through this dialog.', type: 'error', appName: 'Downloads' });
         return;
       }
       const rawName = sanitizeDownloadName(requestedName || url);
@@ -2083,18 +2087,27 @@ registerApp({
         Notify.show({ title: 'Download failed', body: 'Save As did not return a file path.', type: 'error', appName: 'Downloads' });
         return;
       }
-      const entry = window.Downloads?.add(picked.name, isDataImage ? '' : url, 0, '');
+      const entry = window.Downloads?.add(picked.name, isDataUrl ? '' : url, 0, '');
       if (entry) window.Downloads.setStatus(entry.id, 'downloading');
       try {
         let bytes;
-        if (isDataImage) {
+        if (isDataUrl) {
           const comma = url.indexOf(',');
+          if (comma < 5) throw new Error('Invalid data URL');
           const metadata = url.slice(5, comma);
           const payload = url.slice(comma + 1);
-          const data = /;base64/i.test(metadata)
+          const data = /(?:^|;)base64(?:;|$)/i.test(metadata)
             ? Buffer.from(payload, 'base64')
             : Buffer.from(decodeURIComponent(payload), 'utf8');
-          await require('fs').promises.writeFile(picked.path, data);
+          const fs = require('fs').promises;
+          const partPath = picked.path + '.part';
+          try {
+            await fs.writeFile(partPath, data);
+            await fs.rename(partPath, picked.path);
+          } catch (error) {
+            await fs.rm(partPath, { force: true }).catch(() => {});
+            throw error;
+          }
           bytes = data.length;
         } else {
           bytes = await streamUrlToFile(url, picked.path, requestHeaders);
@@ -2247,10 +2260,10 @@ registerApp({
       // itself is what the listener closure captures, and property reads on
       // it always work.
       wv._nbTabId = tabId;
-      wv._nbImageRequestHeaders = new Map();
+      wv._nbDownloadRequestHeaders = new Map();
 
       wv.addEventListener('loadcommit', e => {
-        if (e.isTopLevel) wv._nbImageRequestHeaders.clear();
+        if (e.isTopLevel) wv._nbDownloadRequestHeaders.clear();
         if (e.isTopLevel && e.url) syncUrlForTab(e.url, tabId, 'loadcommit');
       });
 
@@ -2350,6 +2363,16 @@ registerApp({
 
         const safeHint = escapeHtml(hint);
         const safeUrl  = escapeHtml(failedUrl);
+        // JSON.stringify does not escape "</script>" or U+2028/2029 —
+        // escape them so the embedded value cannot terminate the inline
+        // script and hand live markup to the guest page (2026-11-12 audit,
+        // finding M4).
+        const jsonForScript = (v) =>
+          JSON.stringify(v)
+            .replace(/</g, '\\u003c')
+            .replace(/\u2028/g, '\\u2028')
+            .replace(/\u2029/g, '\\u2029');
+
 
         const bypassAttr = showBypass ? ' data-bypass="1"' : '';
         const errorHtml = `<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -2383,7 +2406,7 @@ registerApp({
 </div>
 <script>
   (function() {
-    const u = ${JSON.stringify(failedUrl)};
+    const u = ${jsonForScript(failedUrl)};
     const r = document.getElementById('__nb_retry');
     if (r) r.addEventListener('click', () => { window.location.href = u; });
     const b = document.getElementById('__nb_bypass');
@@ -2406,16 +2429,21 @@ registerApp({
         if (!e.isTopLevel) return;
         if (!e.url || e.url === 'about:blank' || e.url === 'about:newtab') return;
         if (e.reason === 'ERR_ABORTED') return;
-        const reasonJson = JSON.stringify(e.reason || 'Unknown reason');
+        const reasonJson = JSON.stringify(e.reason || 'Unknown reason')
+          .replace(/</g, '\\u003c')
+          .replace(/\u2028/g, '\\u2028')
+          .replace(/\u2029/g, '\\u2029');
         try {
           wv.executeScript({ code: `
             (function() {
               const reason = ${reasonJson};
+              const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+              const reasonText = esc(reason);
               const html = '<html><body style="background:#0d1117;color:#c9d1d9;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0">' +
                 '<div style="text-align:center;max-width:400px">' +
                 '<div style="font-size:32px;margin-bottom:12px">🚫</div>' +
                 '<div style="font-size:16px;font-weight:700;margin-bottom:8px">Navigation Blocked</div>' +
-                '<div style="font-size:12px;color:#8b949e;margin-bottom:16px">' + reason + '</div>' +
+                '<div style="font-size:12px;color:#8b949e;margin-bottom:16px">' + reasonText + '</div>' +
                 '<button id="__nb_back" style="background:#238636;color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer">← Go Back</button>' +
                 '</div></body></html>';
               document.documentElement.innerHTML = html;
@@ -3295,7 +3323,13 @@ registerApp({
           // Deny Chromium's own download (it opens the host's native
           // chooser) and save through the OS Save As dialog instead.
           decide(false);
-          saveDownloadViaDialog(e.request.url || e.url).catch(err => {
+          const downloadUrl = e.request.url || e.url;
+          saveDownloadViaDialog(
+            downloadUrl,
+            e.request.filename || e.request.suggestedFilename,
+            'Save As',
+            getDownloadRequestHeaders(wv, downloadUrl, tab?.url)
+          ).catch(err => {
             console.warn('[NB Browser] Download failed to start:', err);
           });
         } else {
@@ -3321,7 +3355,8 @@ registerApp({
               : (details.requestHeaders || []).filter(header =>
                 !['cookie', 'cookie2'].includes(header.name?.toLowerCase())
               );
-            if (details.type === 'image' && typeof details.url === 'string') {
+            if (['image', 'media', 'main_frame', 'other'].includes(details.type) &&
+                typeof details.url === 'string') {
               const captured = {};
               const allowedHeaders = new Set([
                 'accept', 'accept-language', 'authorization', 'cookie', 'cookie2',
@@ -3333,11 +3368,11 @@ registerApp({
                   captured[header.name] = header.value;
                 }
               }
-              if (wv._nbImageRequestHeaders.size >= 256) {
-                const oldestUrl = wv._nbImageRequestHeaders.keys().next().value;
-                wv._nbImageRequestHeaders.delete(oldestUrl);
+              if (wv._nbDownloadRequestHeaders.size >= 256) {
+                const oldestUrl = wv._nbDownloadRequestHeaders.keys().next().value;
+                wv._nbDownloadRequestHeaders.delete(oldestUrl);
               }
-              wv._nbImageRequestHeaders.set(normalizeRequestUrl(details.url), captured);
+              wv._nbDownloadRequestHeaders.set(normalizeRequestUrl(details.url), captured);
             }
             return { requestHeaders };
           }, { urls: ['<all_urls>'] }, ['blocking', 'requestHeaders', 'extraHeaders']);
@@ -3648,7 +3683,7 @@ registerApp({
           src,
           imageName,
           'Save Image As',
-          getImageRequestHeaders(wv, src, ctx.pageUrl)
+          getDownloadRequestHeaders(wv, src, ctx.pageUrl)
         ).catch(error => {
           console.error('[NB Browser] Could not save image:', error);
           Notify.show({ title: 'Image save failed', body: error?.message || 'Could not save this image.', type: 'error', appName: 'Browser' });

@@ -87,6 +87,18 @@ window.addEventListener('resize', throttleRAF(() => {
 // KEYBOARD SHORTCUTS
 
 document.addEventListener('keydown', (e) => {
+  const setupOpen = [...(OS.windows?.values?.() ?? [])].some(state =>
+    state.appId === 'com.astroos.setup' && state.fullscreen === true
+  );
+  if (setupOpen) {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.key === 'Escape' ||
+        e.key === 'PrintScreen' || /^F\d+$/.test(e.key)) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    return;
+  }
+
   const focused = document.activeElement;
   const inAppContent = focused?.closest?.('.window-content');
   const alwaysAllow =

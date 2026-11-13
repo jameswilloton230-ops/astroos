@@ -4,6 +4,7 @@ import { resetTestStorage } from '../setup.js';
 import { loadServiceApp, settle } from '../helpers/app-harness.js';
 
 const CATALOG_URL = 'https://novabyteteam.github.io/novabyte-os/apps.json';
+const CATALOG_FALLBACK_URL = 'https://raw.githubusercontent.com/AstroOSTeam/novabyte-os/main/src/apps.json';
 
 function fetchServing(catalog, calls = []) {
   return (url) => {
@@ -61,6 +62,7 @@ describe('StoreUpdateService service (js/apps/store-updates)', () => {
         extra: { Notify: { show: (o) => notifyCalls.push(o) } },
       },
     });
+
     window.localStorage.setItem('nova_installed_apps', JSON.stringify([
       { id: 'com.a', version: '1.0.0' },
       { id: 'com.b', version: '2.0.0' },
@@ -87,6 +89,22 @@ describe('StoreUpdateService service (js/apps/store-updates)', () => {
     const again = await window.StoreUpdateService.checkNow();
     expect(again.map((u) => u.id)).toEqual(['com.a']);
     expect(notifyCalls).toHaveLength(1);
+  });
+
+  it('falls back to the raw GitHub catalog when the Pages host cannot be resolved', async () => {
+    const calls = [];
+    const { window } = await loadServiceApp('store-updates', {
+      stubs: {
+        fetch: async (url) => {
+          calls.push(url);
+          if (url === CATALOG_URL) throw new TypeError('Failed to fetch');
+          return { ok: true, status: 200, json: () => Promise.resolve([]) };
+        },
+      },
+    });
+
+    await expect(window.StoreUpdateService.checkNow()).resolves.toEqual([]);
+    expect(calls).toEqual([CATALOG_URL, CATALOG_FALLBACK_URL]);
   });
 
   it('falls back to versionHistory notes and honors semver prerelease ordering', async () => {

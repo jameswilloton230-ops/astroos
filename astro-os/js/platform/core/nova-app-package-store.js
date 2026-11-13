@@ -33,8 +33,19 @@
     return String(id || '').replace(/[^a-zA-Z0-9._-]/g, '_');
   }
 
-  function storagePathForApp(id) {
-    return `${APP_ROOT}/${safeAppId(id)}`;
+  // Multi-user: a person's installed apps get their own file tree, so two
+  // accounts installing the same app don't share (or wipe) each other's copy.
+  // '@' can't come out of safeAppId(), so the segment never collides with an
+  // app id. Bundled system packages are machine-wide and stay at apps/<id>.
+  // `app` is optional; lookups by bare id fall back to the account's tree.
+  function storagePathForApp(id, app) {
+    const state = sysState();
+    const machineWide = app && typeof state?.isMachineApp === 'function' && state.isMachineApp(app);
+    const owner = machineWide || typeof state?.scopedUid !== 'function'
+      ? ''
+      : String(state.scopedUid() || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const root = owner ? `${APP_ROOT}/@users/${owner}` : APP_ROOT;
+    return `${root}/${safeAppId(id)}`;
   }
 
   function normalizePackagePath(path) {
@@ -149,8 +160,17 @@
 
     await ensureReady();
 
-    const storagePath = storagePathForApp(appData.id);
+    const storagePath = storagePathForApp(appData.id, appData);
     await removeStoredFiles({ id: appData.id, storagePath }).catch(() => {});
+
+    // Reinstalling an app that predates per-account storage (legacy owner
+    // upgrading it) moves it to the new tree; clear the old copy so it
+    // isn't orphaned. Only ever this account's own entry, so it can't touch
+    // another user's files.
+    const previous = loadRegistry().find(app => app.id === appData.id);
+    if (previous?.storagePath && previous.storagePath !== storagePath) {
+      await removeStoredFiles(previous).catch(() => {});
+    }
     await OPFS.ensureDirectory(`${storagePath}/files`).catch(() => null);
 
     const fileIndex = [];
@@ -271,6 +291,16 @@
     return true;
   }
 
+  // Deletes every package file an account installed. Guests are the caller:
+  // their inventory is volatile, so without this their files outlive them.
+  async function purgeUserFiles(uid) {
+    const owner = String(uid || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    if (!owner) return false;
+    await ensureReady();
+    await OPFS.deletePath(`${APP_ROOT}/@users/${owner}`, true).catch(() => {});
+    return true;
+  }
+
   window.NovaAppPackageStore = Object.freeze({
     APPS_KEY,
     loadRegistry,
@@ -281,6 +311,7 @@
     installApp,
     hydrateApp,
     hydrateApps,
-    removeApp
+    removeApp,
+    purgeUserFiles
   });
 })();

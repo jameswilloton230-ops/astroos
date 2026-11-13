@@ -35,7 +35,7 @@ function writeNativeSettings(settings) {
 
 const OS = {
   version: '3.0.2',
-  securityPatch: '2026-08-02',  // AstroOS security patch date — globally readable
+  securityPatch: '2026-11-12',  // AstroOS security patch date — globally readable
   username: 'user',
   workers: {},
   windows: new Map(),

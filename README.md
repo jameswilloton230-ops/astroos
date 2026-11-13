@@ -37,13 +37,13 @@ AstroOS is a fork of **NBOSP (NovaByte Open Source Project)** — a heavy reskin
 If you want the bare, unstyled foundation, go use NBOSP directly. AstroOS exists for people who want that foundation with a different look and name already applied.
 
 > [!NOTE]
-> This branch (`latest`) also retires the old repo layout. Earlier AstroOS releases lived in a standalone `astro-os/` snapshot that shared no git history with upstream, which made every sync a manual, grep-heavy port. The tree now mirrors NBOSP's structure with our customisations applied as a clean diff on top — future upstream syncs are real merges instead of archaeology. The old layout is preserved on the `main` branch.
+> This branch (`main`) also retires the old repo layout. Earlier AstroOS releases lived in a standalone `astro-os/` snapshot that shared no git history with upstream, which made every sync a manual, grep-heavy port. The tree now mirrors NBOSP's structure with our customisations applied as a clean diff on top — future upstream syncs are real merges instead of archaeology. The old layout is preserved on the `main-old` branch.
 
 -----
 
 ## What's New in This Sync
 
-This is a full re-sync onto **NBOSP main as of November 2026** — by far the largest content update yet (600+ files changed against the previous AstroOS release) — plus a full re-brand of the tree.
+This is a full re-sync onto **NBOSP main as of November 2026** — by far the largest content update yet (600+ files changed against the previous AstroOS release) — plus a full re-brand of the tree, followed by a merge of **upstream's `gl-debug` branch** (40 commits: multi-user support, the labwc window manager, and a large dependency/security pass), with our UI kept on top.
 
 ### The re-brand
 
@@ -60,16 +60,25 @@ The repo is now AstroOS end to end, not NBOSP with a sticker on it:
 
 ### Inherited from upstream (NBOSP main)
 
-- **A bootable OS image.** NBOSP builds a real x86_64 live ISO via Buildroot: BusyBox init, a Wayland kiosk running in Cage, Linux DRM/KMS with the VMware SVGA driver and Mesa for a graphical desktop in VMs, with the NW.js bundle as the main OS interface. Files can browse the host filesystem and launch executables as the unprivileged kiosk user (after confirmation), the Linux Terminal runs through `/bin/sh`, `curl` is included, sandboxed apps get a system file picker, and per-app sandbox data lives under the kiosk user's home with a one-time legacy data import on first boot. See `astro-os/os/README.md`.
+- **A bootable OS image.** NBOSP builds a real x86_64 live ISO via Buildroot: BusyBox init, a Wayland kiosk running in labwc (XWayland for legacy clients), Linux DRM/KMS with the VMware SVGA driver and Mesa for a graphical desktop in VMs, with the NW.js bundle as the main OS interface. Files can browse the host filesystem and launch executables as the unprivileged kiosk user (after confirmation), the Linux Terminal runs through `/bin/sh`, `curl` is included, sandboxed apps get a system file picker, and per-app sandbox data lives under the kiosk user's home with a one-time legacy data import on first boot. See `astro-os/os/README.md`.
 - **The ISO builds in CI.** The `Build AstroOS ISO` workflow (manual trigger) runs the whole pipeline on GitHub's `ubuntu-latest` runners — integration tests included — and uploads the image as the `astroos-live-x86_64` artifact. See [Building the ISO](#building-the-bootable-iso).
 - **System Webview service.** A trusted first-party guest API now exists, the Browser app has been moved onto it, and web apps build their guests through the System Webview service instead of hand-rolling embedding.
 - **Permission system upgrades.** App manifests must declare `permissionReasons` for every permission they request — those reasons are shown on the first-launch gate, `vfs:*` aliases resolve to real labels in the permission dialog, and filesystem read errors no longer render as `[object Object]`.
 - **Sandbox fix.** `nova:fs:write` serialises object content on every branch, so writing objects no longer produces garbage.
 - **OS build toolchain fixes.** `host-m4` bumped to 1.4.21, a `HOSTCC` wrapper forces `gnu17` for host tools, and the gnulib build failure on GCC 13 / current `ubuntu-latest` images is fixed — which is what makes the Buildroot ISO build work on modern CI at all.
 
+### Merged from upstream `gl-debug`
+
+- **Multi-user accounts.** First-boot **Setup** wizard, a **Users** app, a **Session Manager** service, per-account app/data scoping (`user-scope.js`, per-account registry hives and installed-apps lists), PIN/passphrase authentication with a lockout ladder, and a multi-account lock-screen picker. Legacy single-user data is migrated in on first boot (`multiuser-migration.js`).
+- **The kiosk window manager is now labwc** (with XWayland) instead of Cage — the `labwc` Buildroot package replaces the cage patches, and the ISO boots a labwc session for the NW.js kiosk.
+- **NW.js updated to 0.12.0** — pulls a newer Chromium that closes roughly 200 known vulnerabilities.
+- **Public test signing key + platform signature tier.** `astro-os/keys/` now ships the AOSP-style public test key with a README; Settings → About shows the live **Platform signature** tier (`test-keys` vs `release-keys`) from the trust store, and the security-patch date now comes from the platform instead of being hard-coded.
+- **Store title de-branded** — the in-app Store header now says AstroOS, not NovaByte.
+
 ### The AstroOS layer (re-applied and extended)
 
 - **LineageOS-style theming** re-applied across the shell and apps — `style.css` alone grew by ~400 lines against upstream, plus re-theming of `index.html`, the launcher, and the calculator
+- **Settings sidebar restored** — the LineageOS Material sidebar from the previous release: 220px rail, pill-shaped section buttons (50px radius, 44px tall) with cyan active state, Material card groups with in-card headers, 20px icons
 - **Launcher rework** — custom layout and behaviour on top of the upstream launcher
 - **Calculator extensions** — extra functionality beyond stock NBOSP's calculator
 - **Wallpaper and system-events services** — AstroOS-specific tweaks to both
@@ -167,7 +176,7 @@ If you're trying to find where AstroOS-specific code lives versus stock NBOSP co
 
 ## Status
 
-AstroOS is **beta / active development**. Versioning tracks NBOSP's own version numbers — this release sits on the NBOSP **3.0.2** line with upstream main as of November 2026 merged in, re-branded to AstroOS throughout. Branch layout: **`latest`** is this synced branch; **`main`** preserves the previous AstroOS release layout. Expect bugs, incomplete theming in newer NBOSP-added surfaces, and behaviour that may shift before a stable release.
+AstroOS is **beta / active development**. Versioning tracks NBOSP's own version numbers — this release sits on the NBOSP **3.0.2** line with upstream `gl-debug` as of November 2026 merged in, re-branded to AstroOS throughout. Branch layout: **`main`** is this synced branch; **`main-old`** preserves the previous AstroOS release layout. Expect bugs, incomplete theming in newer NBOSP-added surfaces, and behaviour that may shift before a stable release.
 
 -----
 

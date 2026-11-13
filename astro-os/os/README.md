@@ -5,7 +5,7 @@
 Desktop applications continue to use AstroOS's existing app sandbox and
 permission system. The optional Weston multi-window proof of concept and the
 SELinux boot integration have been removed; the image boots with Buildroot's
-standard BusyBox init and launches the kiosk in Cage. The newer per-app Linux
+standard BusyBox init and launches the kiosk in labwc. The newer per-app Linux
 UID supervisor, process launcher, and associated seccomp, cgroup, and firewall
 isolation are not part of this image. The Linux Terminal runs commands through
 `/bin/sh`, and the image includes the `curl` command-line client for HTTP(S)
@@ -22,7 +22,9 @@ checks the shell and startup files in the actual CPIO initramfs it boots.
 
 This milestone extends the working x86_64 Buildroot boot into a graphical
 VMware desktop: Linux DRM/KMS with the VMware SVGA driver, Mesa, Wayland,
-and Cage. The Linux x64 AstroOS NW.js bundle remains the main OS interface. On
+and labwc (which replaced cage as the compositor, since a stacking
+compositor with layer-shell support lets the OS display system surfaces on
+top of the fullscreen app window). The Linux x64 AstroOS NW.js bundle remains the main OS interface. On
 Linux, Files browses the host filesystem directly, can list ISO contents,
 and can launch executable files as the unprivileged kiosk user after
 confirmation. The shared filesystem API maps to the kiosk user's real home
@@ -125,25 +127,40 @@ the serial console the userspace console so init and
 kiosk startup messages are captured by a configured VMware serial port.
 
 The manual GitHub Actions workflow runs `npm ci` in `astro-os`, builds the Linux
-x64 NW.js application, adjusts its window settings for fullscreen Cage kiosk
+x64 NW.js application, adjusts its window settings for fullscreen labwc kiosk
 mode using XWayland, and installs the complete app bundle into the ISO at
-`/opt/astroos`.
+`/opt/astroos`. Before building the app, it updates the Settings Build Date to
+the current `Europe/London` date, commits and pushes that change to the
+`gl-debug` branch, and keeps it in the checkout used for the ISO.
 The application build uses the same pinned NW.js SDK version as the `nw`
 package instead of tracking `latest`, keeping the runtime, SDK, and optional
 FFmpeg binary release in sync. Browser downloads use NW.js's Downloads API,
 save into the user's Downloads folder, and appear in the Downloads app with
 progress and completion status.
-At boot, Buildroot starts Cage on the VMware display and launches NW.js as the
-unprivileged `astroos` user. Cage and NW.js output is appended to
-`/home/astroos/astroos-kiosk.log` and mirrored to the configured `ttyS0` serial
+At boot, Buildroot starts labwc on the VMware display and launches NW.js as the
+unprivileged `astroos` user. labwc (with `-S`, its session mode) and NW.js output is appended to
+`/var/log/astroos/kiosk.log` and mirrored to the configured `ttyS0` serial
 console for debugging without switching virtual terminals. The kiosk is
 started inside a fresh D-Bus session to avoid inheriting a malformed session
 bus address. The NW.js bundle remains root-owned. Mutable runtime state,
 including generated secrets, TLS certificates, server logs, and SQLite data,
 is stored under `/home/astroos/.config/novabyte/runtime`. User settings and
-profile data are stored under `/home/astroos`. Cage runs the compositor on Wayland and
+profile data are stored under `/home/astroos`. labwc runs the compositor on Wayland and
 XWayland is enabled for NW.js, retaining GPU acceleration while avoiding the
 Chromium native-Wayland DMA-BUF import failure observed with VMware SVGA.
+The kiosk user's home is the machine's SYSTEM area, exactly like a real
+multi-user OS: each account's visible filesystem lives under
+`/home/astroos/users/<username>/`, and the machine root holds only the account
+trees plus hidden dot-state (`.config`, `.local`, `.pki`). Boot never creates
+the standard user folders at the machine root, a login-time sweep adopts any
+legacy leftovers into the signing-in account, session logs live under
+`/var/log/astroos`, and the runtime cache under `/var/cache/astroos`
+(`XDG_CACHE_HOME`), so nothing user-visible ever piles up in the home root.
+The labwc kiosk configuration (`/etc/labwc/rc.xml`) binds NOTHING at the
+compositor level — no focus cycling, no window-menu, no compositor-owned
+shortcut of any kind — matching the cage-era lockdown: every shortcut is
+handled inside the AstroOS app window, the app window refuses WM close
+requests, and PrintScreen is handled in-page.
 The image enables Mesa's VMware SVGA Gallium driver and X11/GLX support for
 NW.js running through XWayland. Chromium explicitly requests the built
 EGL/ANGLE implementation with its OpenGL backend; the previous desktop-GL
@@ -177,26 +194,25 @@ XWayland glamor failure is being tracked down. Set `ASTROOS_GL_DEBUG=0` in the
 init environment to turn it all off. It does not change which GL backend
 Chromium requests. It adds:
 
-- Cage logs at wlroots debug level. Release Cage hard-codes the error level,
-  so `patches/cage/0001-runtime-debug-logging.patch` makes it honour
-  `CAGE_DEBUG`. (Cage's `-d` flag is "no client-side decorations", not debug.)
-- By default the dump runs a second XWayland (`:7`) against the live cage with
+- labwc logs at debug level when started with `labwc -d` (passed automatically
+  in GL debug mode).
+- By default the dump runs a second XWayland (`:7`) against the live labwc with
   `-verbose 10`, which should say why glamor falls back. Output:
-  `~astroos/xwayland-probe.log`.
-- Optional, off by default (`ASTROOS_GL_XWRAP=1`): launch cage's XWayland through
+  `/var/log/astroos/xwayland-probe.log`.
+- Optional, off by default (`ASTROOS_GL_XWRAP=1`): launch labwc's XWayland through
   `/run/astroos-debug-bin/Xwayland` (via `WLR_XWAYLAND`, with a `PATH` fallback).
   It runs with `-verbose 10` and `LD_DEBUG=libs`, plus `strace -Z` if
   `ASTROOS_GL_STRACE=1`. In the first two debug boots this wrapper made XWayland
   exit within 10-90ms, so it stays off until we know why.
-  Output: `~astroos/xwayland-debug.log`, `xwayland-ld.<pid>`, `xwayland.strace`.
+  Output: `/var/log/astroos/xwayland-debug.log`, `xwayland-ld.<pid>`, `xwayland.strace`.
 - `EGL_LOG_LEVEL=debug`, `MESA_DEBUG=1`, and Chromium `--vmodule` logging for
   the GL display/context/GPU-init code.
 - `mesa3d-demos` (`eglinfo`, `glxinfo`), `wayland-utils` (`wayland-info`) and
   `strace` in the image.
 - About 30 seconds after boot (once XWayland has started) a dump of the
-  graphics state is written to `~astroos/astroos-gl-debug.log`, the serial
-  console and `astroos-kiosk.log`: library and driver listing, glvnd vendor
-  files, the libraries cage and XWayland actually mapped, their environment,
+  graphics state is written to `/var/log/astroos/gl-debug.log`, the serial
+  console and `kiosk.log`: library and driver listing, glvnd vendor
+  files, the libraries labwc and XWayland actually mapped, their environment,
   `eglinfo`/`glxinfo`/`wayland-info`, and the filtered XWayland logs. Attach
   the serial log, or that file, to a bug report.
 The image also includes ALSA HDA and Ensoniq ES1371 drivers and utilities.
@@ -217,7 +233,7 @@ session, overriding it can misalign pointer hit-testing and native popup
 positions, including NW.js context menus and DevTools. Adjust the virtual
 machine's display resolution instead.
 The Date and Region settings also include a keyboard layout selector. The
-selected XKB layout is saved for the `astroos` user and passed to Cage on its
+selected XKB layout is saved for the `astroos` user and passed to labwc on its
 next start, so restart AstroOS after changing it. The ISO build verifies
 that every offered layout is included in the image.
 Settings includes a Connectivity section backed by NetworkManager/wpa_supplicant
@@ -238,8 +254,8 @@ DejaVu Sans/Mono and Noto Color Emoji fonts and Fontconfig are included so
 Chromium and the UI can render text and emoji without downloading fonts at
 runtime. The emoji font is pinned to a Noto Emoji source revision and its OFL
 license is included in the image. The Whiteglass Xcursor theme is included,
-and Cage uses the DRM hardware cursor plane. If the pointer is invisible in
-VMware, set `WLR_NO_HARDWARE_CURSORS=1` for Cage in `S99astroos` to force a
+and labwc uses the DRM hardware cursor plane. If the pointer is invisible in
+VMware, set `WLR_NO_HARDWARE_CURSORS=1` for labwc in `S99astroos` to force a
 software cursor.
 The image build keeps Buildroot's cached kernel and graphics outputs. It
 clean-rebuilds Mesa, libglvnd, and XWayland only when the graphics configuration
@@ -295,9 +311,9 @@ menu and `<select>` dropdowns are X11 override-redirect windows. Those windows
 map first and then move themselves to the anchored position, and Cage 0.2.0 only
 copied the position at map time — every such popup landed in the top-left corner
 instead of at the cursor (upstream cage issue #228, fix in unmerged PR #283).
-`patches/cage/0003-xwayland-position-override-redirect-windows.patch` backports
-that fix: it tracks wlroots' `set_geometry` event for override-redirect surfaces
-and moves the scene node with it, and skips maximize/center positioning for them.
+With the cage-to-labwc swap the cage-specific patches were deleted; labwc's own
+X11 handling manages override-redirect surfaces differently, so popup placement
+must be re-verified in the VM (the patch set may need a labwc-based rework).
 
 ### XWayland input stacking
 
@@ -305,15 +321,11 @@ The same XWayland boundary also affects which window receives the mouse. Xwaylan
 delivers pointer events to the topmost X11 window under the cursor (`XYToWindow`
 semantics), but wlroots 0.17+ restacks every newly mapped managed window to the
 *bottom* of the X11 stack and leaves syncing the stack to the compositor via
-`wlr_xwayland_surface_restack()` — which Cage 0.2.0 never calls. Since kiosk views
-are all fullscreen at (0,0), a second window (NW.js DevTools, any other X client)
-draws on top but sits at the bottom of the X11 stack: it renders fine, keyboard
-focus follows activation, yet every click silently lands on the window underneath.
-`patches/cage/0004-xwayland-restack-focused-view.patch` fixes this by restacking
-the surface to the top of the managed X11 stack whenever cage focuses the view
-(both map-time focus and click-to-focus go through `seat_set_focus`), mirroring
-sway's handling of the same wlroots API. Override-redirect surfaces are skipped:
-wlroots asserts on restacking them and they always map above managed windows.
+`wlr_xwayland_surface_restack()` — which Cage 0.2.0 never called. labwc, unlike
+cage, calls the restacking API when it focuses windows (it is a regular
+stacking compositor, so keeping the X11 stack consistent is core logic for
+it), which is why the cage restacking patches (`0002`, `0004`) could be
+dropped with the swap. Click routing still wants a VM verification pass.
 
 ### Nested webview overlays, context menus, and the annotation layer
 
@@ -356,5 +368,5 @@ annotation layer that lives inside the guest document:
 
 This image targets the VMware virtual SVGA device first. Graphics support for
 other virtual machines or physical hardware has not been validated. NW.js,
-Wayland, Cage, and their runtime libraries are compiled into the image, so the
+Wayland, labwc, and their runtime libraries are compiled into the image, so the
 ISO is significantly larger than the earlier console-only image.

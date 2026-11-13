@@ -28,4 +28,10 @@ server.log
 
 # prebuilt app packages — source lives in astro-os/js/apps/<name>/, build with repackage.js
 /astro-os/js/apps/*.novaapp
-# Supabase CLI local state
+
+# astro-os/keys/ holds the AOSP-style PUBLIC test signing key plus its README.
+# Everything else there (release keys, rotation candidates) stays ignored —
+# only the deliberately-public test key pair is committed. See keys/README.md.
+/astro-os/keys/*
+!/astro-os/keys/test-system-key.json
+!/astro-os/keys/README.md

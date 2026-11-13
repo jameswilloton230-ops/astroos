@@ -89,6 +89,10 @@
     "entry": "service.js"
   },
   {
+    "id": "com.astroos.service.session",
+    "entry": "service.js"
+  },
+  {
     "id": "com.astroos.service.lock-screen",
     "entry": "service.js"
   },

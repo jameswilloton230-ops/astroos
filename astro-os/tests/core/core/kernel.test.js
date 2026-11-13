@@ -64,7 +64,7 @@ describe('OS kernel (js/core/core/kernel.js)', () => {
       const OS = loadKernel();
       expect(OS).toBeTypeOf('object');
       expect(OS.version).toBe('3.0.2');
-      expect(OS.securityPatch).toBe('2026-08-02');
+      expect(OS.securityPatch).toBe('2026-11-12');
       expect(typeof window.getPinSalt).toBe('function');
       expect(typeof OS.events.on).toBe('function');
       expect(typeof OS.events.off).toBe('function');

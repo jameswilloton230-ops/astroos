@@ -98,15 +98,91 @@ const TrustStore = (() => {
   // for the "System" badge in the App Manager package —
   // that's a stronger claim than ordinary "Verified", so it gets its own
   // signer identity rather than reusing NOVABYTE_TRUSTED_SIGNING_PUBLIC_JWK.
-  // Replace this JWK with your own Ed25519 public key before relying on
-  // the System badge for anything — as committed, this is a non-functional
-  // placeholder (no matching private key exists for it), so nothing will
-  // verify against it until you swap it out.
+  //
+  // AOSP-STYLE TEST KEY (2026-11-12 follow-up to audit finding F1): this
+  // anchor now points at the PUBLIC test pair committed at
+  // astro-os/keys/test-system-key.json — AstroOS's equivalent of AOSP's
+  // platform test keys. The first audit rotation removed the committed
+  // key entirely and required ASTROOS_SYSTEM_SIGNING_KEY(_PATH) for every
+  // build, which produced honest-UNSIGNED packages by default: a fresh
+  // clone or fork could no longer build an OS whose system apps verified
+  // at all. That broke the fork story, so the Android model is used
+  // instead:
+  //
+  //   • Default builds sign with this deliberately-public test key and
+  //     verify as 'Astro System' everywhere — like an AOSP build
+  //     signed with the public platform test keys. Packages built this
+  //     way are labelled tier 'test' (TrustStore.systemSignatureTier()
+  //     → 'test-keys', Settings → About shows it).
+  //   • Release builds set ASTROOS_SYSTEM_SIGNING_KEY(_PATH) at build time
+  //     (offline private key) and ASTROOS_SYSTEM_SIGNING_PUBLIC_JWK at
+  //     server start; the server injects that JWK into the page as
+  //     <meta name="nova-system-signing-jwk">, and the loader below swaps
+  //     this anchor for the release key (tier 'release-keys'). See
+  //     astro-os/keys/README.md for the full rotation recipe.
+  //
+  // The compromise picture is unchanged and public: anyone who can read
+  // this repository can mint test-key "Astro System" packages — the
+  // exact trade-off AOSP makes with its test keys, which is why test-key
+  // builds must never gate security-critical production machinery.
+  // Production machines rotate per the README.
+  // Public half of astro-os/keys/test-system-key.json (the private half is
+  // committed too, by design — it is a TEST key, like AOSP's platform.pk8).
+  // Double-quoted and comment-free so tools can JSON.parse this block
+  // straight out of the source (see tests/system/build-apps.test.js).
   const NOVABYTE_SYSTEM_SIGNING_PUBLIC_JWK = {
-  "kty": "OKP",
-  "crv": "Ed25519",
-  "x": "vAglEORayg7_dzvIe1hJ6_RJrLKlEin_77IFWa-8k_o"
-};
+    "kty": "OKP",
+    "crv": "Ed25519",
+    "x": "1TNRWqX25g25bnbnW1RlytMqzp4XQwuqJA33XL_plIA"
+  };
+
+  // ── Release-key override (server-injected meta) ────────────────────────
+  // ASTROOS_SYSTEM_SIGNING_PUBLIC_JWK (env) → <meta name="nova-system-signing-jwk">
+  // → this loader. A well-formed OKP/Ed25519 JWK replaces the default test
+  // anchor; anything else keeps the committed test key. Only the PUBLIC half
+  // ever travels through the page — the server must never be given the
+  // private key.
+  const SYSTEM_KEY_META_NAME = 'nova-system-signing-jwk';
+
+  function _loadSystemKeyOverride() {
+    if (typeof document === 'undefined' || !document?.querySelector) {
+      return null;
+    }
+    let raw = null;
+    try {
+      raw = document.querySelector(`meta[name="${SYSTEM_KEY_META_NAME}"]`)?.getAttribute('content') || null;
+    } catch (_) {
+      return null;
+    }
+    if (!raw) return null;
+    let jwk = null;
+    try {
+      jwk = JSON.parse(raw);
+    } catch (_) {
+      console.warn('[TrustStore] nova-system-signing-jwk meta tag is not valid JSON — keeping the default test-key anchor');
+      return null;
+    }
+    if (
+      !jwk || typeof jwk !== 'object' ||
+      jwk.kty !== 'OKP' || jwk.crv !== 'Ed25519' ||
+      typeof jwk.x !== 'string' || !jwk.x
+    ) {
+      console.warn('[TrustStore] nova-system-signing-jwk meta tag is not an Ed25519 OKP JWK — keeping the default test-key anchor');
+      return null;
+    }
+    return jwk;
+  }
+
+  const SYSTEM_KEY_OVERRIDE = _loadSystemKeyOverride();
+
+  function _isPlausibleJwk(key) {
+    return (
+      key !== null &&
+      typeof key === 'object' &&
+      typeof key.kty === 'string' &&
+      key.kty.length > 0
+    );
+  }
 
   const entries = [
     {
@@ -119,11 +195,17 @@ const TrustStore = (() => {
     {
       name: 'Astro System',
       id: 'astro-system-signing-v1',
-      publicKey: NOVABYTE_SYSTEM_SIGNING_PUBLIC_JWK,
+      // The release override (server-injected meta, see above) replaces the
+      // committed test key when the operator rotated their build; tier moves
+      // from 'test' to 'release' with it.
+      publicKey: SYSTEM_KEY_OVERRIDE || NOVABYTE_SYSTEM_SIGNING_PUBLIC_JWK,
+      tier: SYSTEM_KEY_OVERRIDE ? 'release' : 'test',
       // installPackage() in app-package.js checks signer === 'Astro System'
       // to set appConfig.system — keep this `name` in sync with that check
       // if it's ever renamed.
-      description: 'Signed by the Astro System key. Packages signed by this key may show a System badge; System status does not prevent user-initiated uninstall.',
+      description: SYSTEM_KEY_OVERRIDE
+        ? 'Signed by the operator\u2019s rotated release System key (release-keys).'
+        : 'Signed by the Astro System TEST key — the AOSP-style public test pair committed at astro-os/keys/test-system-key.json. Test-key builds (systemSignatureTier() "test-keys") verify on any clone or fork; production machines must rotate to a release key (see keys/README.md).',
     },
     // Additional trusted CAs / partners can be appended here.
   ];
@@ -269,20 +351,16 @@ const TrustStore = (() => {
   }
 
   /**
-   * Basic shape check for a JWK — enough to catch "someone passed the
-   * wrong object" or a typo'd field name at add() time, rather than
-   * letting a malformed key sit in the trust store until the first
-   * verification attempt fails in a confusing way. This is a shape
-   * check, not a cryptographic validity check — it doesn't confirm the
-   * key material itself is well-formed, only that it looks like a JWK.
+   * The AOSP ro.build.tags-style label for the ACTIVE System signer tier:
+   * 'test-keys' when the committed public test key is the anchor (every
+   * default build, every fork), 'release-keys' when the operator rotated
+   * to their own key through the server-injected meta. Settings > About
+   * renders this next to the security patch level so a test-key build
+   * can never masquerade as a release-key one.
    */
-  function _isPlausibleJwk(key) {
-    return (
-      key !== null &&
-      typeof key === 'object' &&
-      typeof key.kty === 'string' &&
-      key.kty.length > 0
-    );
+  function systemSignatureTier() {
+    const systemEntry = entries.find((entry) => entry.id === 'astro-system-signing-v1');
+    return systemEntry?.tier === 'release' ? 'release-keys' : 'test-keys';
   }
 
   function add(entry) {
@@ -409,7 +487,7 @@ const TrustStore = (() => {
     return revoked.slice();
   }
 
-  return { list, add, revoke, unrevoke, isRevoked, getRevocation, listRevoked };
+  return { list, add, revoke, unrevoke, isRevoked, getRevocation, listRevoked, systemSignatureTier };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = TrustStore;

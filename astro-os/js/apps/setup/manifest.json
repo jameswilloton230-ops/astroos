@@ -1,0 +1,16 @@
+{
+  "id": "com.astroos.setup",
+  "name": "AstroOS Setup",
+  "author": "jameswilloton230-ops",
+  "description": "First-boot setup wizard: keyboard layout, network, date and region, data & privacy, owner account, appearance. Runs in the trusted host; the lock screen launches it whenever the machine has no accounts.",
+  "version": "3.0.2",
+  "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5NiA5NiIgd2lkdGg9Ijk0IiBoZWlnaHQ9Ijk0Ij48IS0tIHNldHVwIHdpemFyZDogc3RhcnMrY2lyY2xlIC0tPjxjaXJjbGUgY3g9IjQ4IiBjeT0iNDgiIHI9IjM4IiBmaWxsPSIjOTNjNWZkIi8+PGNpcmNsZSBjeD0iNDgiIGN5PSI0OCIgcj0iMzAiIGZpbGw9IiMyNTYzZWIiLz48cGF0aCBkPSJNNDAgMzYgTDQ4IDUwIEw1NiAzNiIgc3Ryb2tlPSIjZmRlNjhhIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgZmlsbD0ibm9uZSIvPjxyZWN0IHg9IjM2IiB5PSI1NiIgd2lkdGg9IjI0IiBoZWlnaHQ9IjUiIHJ4PSIyLjUiIGZpbGw9IiNmZGU2OGEiLz48L3N2Zz4=",
+  "category": "system",
+  "categories": ["system", "utility"],
+  "entry": "index.html",
+  "unrestrictedEntry": "app.js",
+  "type": "blank",
+  "defaultSize": [920, 640],
+  "permissions": [],
+  "system": true
+}

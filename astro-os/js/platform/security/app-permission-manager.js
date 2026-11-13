@@ -641,6 +641,20 @@ const AppPermissionManager = (() => {
   function isGranted(permission, appId) {
     if (isUnrestrictedSettingsApp(appId)) return true;
     if (permission === PERMISSION_TYPES.SYSTEM_ROOT && !isRootModeEnabled()) return false;
+    // ── Multi-user enforcement (three independent layers, all must agree) ──
+    // 1. admin:* grants require an admin-role session: an app holding
+    //    admin:users under a standard account receives nothing.
+    if (typeof permission === 'string' && permission.indexOf('admin:') === 0 && !isAdminSessionActive()) {
+      return false;
+    }
+    // 2. Machine policy floors/ceilings at HKNS/security/policy/appPolicy/
+    //    <appId>: a kiosk can pin a permission always-granted or forbid it
+    //    machine-wide entirely, overriding the per-account consent.
+    const policy = appPolicyFor(appId);
+    if (policy) {
+      if (Array.isArray(policy.deny) && policy.deny.includes(permission)) return false;
+      if (Array.isArray(policy.pin) && policy.pin.includes(permission)) return true;
+    }
     const grant = permissionGrants.get(makeAppScopedKey(appId, permission));
     if (!grant) return false;
     if (grant.expiresAt && Date.parse(grant.expiresAt) < Date.now()) {
@@ -653,6 +667,36 @@ const AppPermissionManager = (() => {
       return false;
     }
     return grant.granted === true;
+  }
+
+  /** True while an admin-role account session is active (multi-user). */
+  function isAdminSessionActive() {
+    if (typeof NovaUserScope === 'undefined' || !NovaUserScope?.enabled?.()) return true;
+    return typeof window !== 'undefined' && !!window.SessionManager?.isAdmin?.();
+  }
+
+  /** Machine-level floors/ceilures for one app, or null. Fail-soft. */
+  function appPolicyFor(appId) {
+    try {
+      if (typeof window === 'undefined' || !window.NovaRegistry?.get) return null;
+      const value = window.NovaRegistry.get(`HKNS/security/policy/appPolicy/${String(appId || '')}`);
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+    } catch (_) { return null; }
+  }
+
+  /**
+   * Re-loads the grant table after the mounted account changed (login or
+   * user switch): grants are per-account now, so the SessionManager calls
+   * this as part of the per-user mount sequence. Fail-soft: an unreadable
+   * hive leaves the previous in-memory table untouched.
+   */
+  function reloadForUser() {
+    try {
+      permissionGrants.clear();
+      rateLimitState.clear();
+      initialize();
+      return true;
+    } catch (_) { return false; }
   }
 
   function isDenied(permission, appId) {
@@ -761,6 +805,21 @@ const AppPermissionManager = (() => {
     const appName = options.appName
       ?? (typeof AppRegistry !== 'undefined' ? AppRegistry.getApp(appId)?.name : null)
       ?? appId;
+    // SECURITY (2026-11-12 audit, finding F4): the system:root consent
+    // dialog must reflect the package's publisher trust state. An
+    // unverified package that reached this prompt (Packages app
+    // "allow unverified" install, or a dev-mode build) gets an explicit
+    // UNVERIFIED PUBLISHER banner — the grant executes the package's
+    // unrestrictedEntry in the trusted host page, so the user deserves to
+    // know the code's provenance is unproven.
+    let trustNote = null;
+    if (permission === PERMISSION_TYPES.SYSTEM_ROOT) {
+      const record = typeof AppRegistry !== 'undefined' ? AppRegistry.getApp(appId) : null;
+      const systemSigned = record?.verified === true && record?.signer === 'Astro System';
+      if (!systemSigned) {
+        trustNote = 'UNVERIFIED PUBLISHER — this package was NOT signed by any trusted signing authority. Granting root lets its code run unrestricted inside the OS host process.';
+      }
+    }
     const riskLevel = PERMISSION_CATEGORIES[permission]?.risk ?? 'low';
     const permanent = permission === PERMISSION_TYPES.SYSTEM_ROOT || options.permanent !== false;
 
@@ -777,6 +836,7 @@ const AppPermissionManager = (() => {
       permission, appId, appName, riskLevel,
       reason   : effectiveReason,
       permanent,
+      trustNote,
       current  : options.current ?? 1,
       total    : options.total ?? 1,
     });
@@ -1092,7 +1152,7 @@ const AppPermissionManager = (() => {
       return Promise.resolve(false);
     }
     return new Promise((resolve) => {
-      const { permission, appName, riskLevel, reason, current, total } = opts;
+      const { permission, appName, riskLevel, reason, trustNote, current, total } = opts;
       const riskColor = RISK_COLORS[riskLevel] ?? RISK_COLORS.low;
       const riskIcon  = RISK_ICONS[riskLevel] ?? RISK_ICONS.low;
       const meta      = PERMISSION_CATEGORIES[permission];
@@ -1111,6 +1171,14 @@ const AppPermissionManager = (() => {
       });
 
       if (total > 1) card.append(buildPagerRow(current, total));
+      if (trustNote) {
+        const trustBanner = el('div', {
+          style: 'display:flex;align-items:flex-start;gap:8px;margin-bottom:14px;padding:10px 12px;background:rgba(248,81,73,0.12);border:1px solid rgba(248,81,73,0.45);border-radius:8px;',
+        });
+        trustBanner.append(el('span', { style: 'font-size:14px;line-height:1.2;', text: '\u26A0\uFE0F' }));
+        trustBanner.append(el('span', { style: 'color:#ff7b72;font-size:12px;line-height:1.5;font-weight:600;', text: trustNote }));
+        card.append(trustBanner);
+      }
       card.append(buildHeaderRow({ label, appName, riskColor, riskIcon }));
       // Always a reason block: the declared reason when there is one, the
       // explicit fallback otherwise — a silent gap would leave users
@@ -1223,6 +1291,7 @@ const AppPermissionManager = (() => {
 
   return {
     initialize,
+    reloadForUser,
     isGranted,
     isDenied,
     isRateLimited,

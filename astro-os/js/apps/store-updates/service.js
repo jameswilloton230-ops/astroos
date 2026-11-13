@@ -2,6 +2,7 @@
   'use strict';
 
   const CATALOG_URL = 'https://novabyteteam.github.io/novabyte-os/apps.json';
+  const CATALOG_FALLBACK_URL = 'https://raw.githubusercontent.com/AstroOSTeam/novabyte-os/main/src/apps.json';
   const INSTALLED_APPS_KEY = 'nova_installed_apps';
   const SETTINGS_KEY = 'nova_store_update_interval_minutes';
   const NOTIFIED_KEY = 'nova_store_update_notified';
@@ -162,7 +163,13 @@
   async function checkNow() {
     if (checking) return checking;
     checking = (async () => {
-      const response = await fetch(CATALOG_URL, { cache: 'no-store' });
+      let response;
+      try {
+        response = await fetch(CATALOG_URL, { cache: 'no-store' });
+      } catch (primaryError) {
+        console.warn('[StoreUpdateService] GitHub Pages catalog unavailable; trying the raw GitHub mirror.', primaryError);
+        response = await fetch(CATALOG_FALLBACK_URL, { cache: 'no-store' });
+      }
       if (!response.ok) throw new Error(`App catalog request failed (${response.status})`);
       const catalog = await response.json();
       if (!Array.isArray(catalog)) throw new Error('App catalog must contain a list.');

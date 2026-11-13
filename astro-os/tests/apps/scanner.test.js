@@ -1,5 +1,5 @@
 // tests/apps/scanner.test.js — service app: static-heuristic file gate.
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { resetTestStorage } from '../setup.js';
 import { loadServiceApp } from '../helpers/app-harness.js';
 
@@ -125,6 +125,17 @@ describe('Scanner service (js/apps/scanner)', () => {
 
     const empty = await window.Scanner.scanBase64('empty.dat', '');
     expect(empty.safe).toBe(true);
+  });
+
+  it('bounds base64 decoding for large package assets', async () => {
+    const { window } = await loadServiceApp('scanner');
+    const decode = vi.spyOn(window, 'atob');
+    const largeImage = Buffer.alloc(12 * 1024 * 1024).toString('base64');
+    const verdict = await window.Scanner.scanBase64('large.png', largeImage);
+
+    expect(verdict.safe, verdict.reason).toBe(true);
+    expect(decode).toHaveBeenCalledOnce();
+    expect(decode.mock.calls[0][0].length).toBeLessThanOrEqual(700_000);
   });
 
   it('reports unreadable files as unsafe instead of throwing', async () => {

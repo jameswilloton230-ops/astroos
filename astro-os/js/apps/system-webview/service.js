@@ -722,8 +722,23 @@
 
   function isFirstParty(app) {
     if (!app || typeof app.id !== 'string') return false;
-    const system = app.system === true || app.manifest?.system === true;
-    return system && TRUSTED_ID_PATTERN.test(app.id);
+    if (!TRUSTED_ID_PATTERN.test(app.id)) return false;
+    // Synthetic host-side descriptors (the Browser tab factory and the
+    // registry service's web-app windows) declare system: true directly
+    // and carry no package record — those stay first-party by definition:
+    // they are OS code running in the trusted host realm, not package data.
+    const isPackageRecord = app.manifest !== undefined || app.verified !== undefined;
+    if (!isPackageRecord) return app.system === true;
+    // SECURITY (2026-11-12 audit, finding F5): for actual package records,
+    // the raw manifest `system` flag is attacker-controlled .novaapp data.
+    // The rest of the platform (app-package install, AppRegistry, the
+    // UnrestrictedGate) only honours it together with the System signer
+    // triple — mirror exactly that rule here so an unverified record with a
+    // com.astroos.*-shaped id can never obtain an unsandboxed,
+    // executeScript-capable trusted webview.
+    return app.system === true &&
+      app.verified === true &&
+      app.signer === 'Astro System';
   }
 
   function resolveTrustedPartition(app, options) {

@@ -1,6 +1,6 @@
 // tests/apps/music.test.js — window app: library scan via MediaStore, track
 // row activation, shuffle/repeat/volume preferences, corrupt-pref recovery.
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { resetTestStorage } from '../setup.js';
 import { loadWindowApp, initApp, settle } from '../helpers/app-harness.js';
 
@@ -15,13 +15,15 @@ function patchBrowserMedia(window) {
     window.URL.createObjectURL = () => `blob:mock/${++n}`;
     window.URL.revokeObjectURL = () => {};
   }
-  window.HTMLMediaElement.prototype.play = function play() {
+  const play = vi.fn(function play() {
     this.dispatchEvent(new window.Event('play'));
     return Promise.resolve();
-  };
+  });
+  window.HTMLMediaElement.prototype.play = play;
   window.HTMLMediaElement.prototype.pause = function pause() {
     this.dispatchEvent(new window.Event('pause'));
   };
+  return play;
 }
 
 // MediaStore query fixture — { type:'audio', limit, offset } → page array.
@@ -36,10 +38,10 @@ function makeNotify() {
   return { calls, show: (n) => calls.push(n) };
 }
 
-async function loadMusic({ media = [], notify = makeNotify() } = {}) {
+async function loadMusic({ media = [], openedFile = null, state = {}, notify = makeNotify() } = {}) {
   // scanLibrary prefers the FS.files record for each MediaStore hit, so the
   // fixture must live there to keep its content bytes.
-  const fsFiles = new Map(media.map((t) => [t.id, { ...t, type: 'file' }]));
+  const fsFiles = new Map([...media, ...(openedFile ? [openedFile] : [])].map((t) => [t.id, { ...t, type: 'file' }]));
   const loaded = await loadWindowApp('music', {
     stubs: {
       extra: {
@@ -49,10 +51,10 @@ async function loadMusic({ media = [], notify = makeNotify() } = {}) {
       },
     },
   });
-  patchBrowserMedia(loaded.window);
-  const content = initApp(loaded.app, { window: loaded.window, state: {} });
+  const play = patchBrowserMedia(loaded.window);
+  const content = initApp(loaded.app, { window: loaded.window, state });
   await settle(10);
-  return { ...loaded, content };
+  return { ...loaded, content, play };
 }
 
 // Track records as they live in FS.files — content must be decodable by
@@ -131,6 +133,22 @@ describe("'Music' app (js/apps/music)", () => {
     current.click();
     await settle(10);
     expect(audio.src).toMatch(/^blob:mock\//); // src untouched — no re-load
+  });
+
+  it('selects and autoplays a file opened from Files even outside the Music library', async () => {
+    const openedFile = { id: 'opened-track', name: 'voice.aac', mimeType: 'audio/aac', content: 'opened-audio-bytes' };
+    const { content, play } = await loadMusic({
+      media: TRACKS,
+      openedFile,
+      state: { fileId: openedFile.id },
+    });
+    const audio = content.querySelector('audio');
+    const row = content.querySelector('[data-track-id="opened-track"]');
+
+    expect(row).toBeTruthy();
+    expect(row.dataset.current).toBe('true');
+    expect(audio.src).toMatch(/^blob:mock\//);
+    expect(play).toHaveBeenCalledTimes(1);
   });
 
   it('notifies via Notify when the MediaStore service is unavailable', async () => {

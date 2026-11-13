@@ -7,6 +7,7 @@
 // test, so a contract-faithful in-memory FS (same API as
 // js/core/services/fs.js) is injected via stubs.extra.
 import { describe, expect, it, beforeEach } from 'vitest';
+import { EventEmitter } from 'node:events';
 import { resetTestStorage } from '../setup.js';
 import { loadWindowApp, initApp, settle } from '../helpers/app-harness.js';
 
@@ -214,6 +215,37 @@ describe('Terminal app (js/apps/terminal)', () => {
     expect(content.textContent).toContain('com.astroos.terminal');
   });
 
+  it('starts the Linux shell in the mounted user home and sets HOME', async () => {
+    const calls = [];
+    const child = new EventEmitter();
+    child.pid = 123;
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.stdin = { on() {}, write() {} };
+    const processStub = { platform: 'linux', env: {}, kill() {} };
+    const { app, window } = await loadWindowApp('terminal', {
+      stubs: terminalStubs({
+        extra: {
+          process: processStub,
+          FS: { rootId: '/home/astroos/users/sam' },
+          require: (name) => {
+            if (name === 'child_process') return { spawn: (...args) => { calls.push(args); return child; } };
+            if (name === 'os') return { homedir: () => '/home/astroos', userInfo: () => ({ username: 'astroos' }) };
+            throw new Error(`Unexpected module: ${name}`);
+          },
+        },
+      }),
+    });
+    const state = { cleanups: [] };
+    initApp(app, { window, state });
+
+    expect(calls[0][2]).toMatchObject({
+      cwd: '/home/astroos/users/sam',
+      env: { HOME: '/home/astroos/users/sam' },
+    });
+    state.cleanups.forEach(cleanup => cleanup());
+  });
+
   it('boots with a welcome banner and a user:~$ prompt', async () => {
     const t = await boot(terminalStubs());
     const text = t.output.textContent;
@@ -234,6 +266,11 @@ describe('Terminal app (js/apps/terminal)', () => {
     }
     expect(text).toContain('neofetch');
     expect(text).toContain('Ctrl+L');
+    expect(text).toContain('All commands:');
+    expect(text).toContain('base64');
+    expect(text).toContain('sleep');
+    expect(text).toContain('Aliases:');
+    expect(text).toContain('cls');
   });
 
   it('echoes the command line with the prompt and prints command output', async () => {
@@ -246,14 +283,14 @@ describe('Terminal app (js/apps/terminal)', () => {
     expect(t.input.value).toBe('');
   });
 
-  it('resolves pwd, whoami and $HOME expansion', async () => {
+  it('starts in the user home and resolves pwd, whoami and $HOME expansion', async () => {
     const t = await boot(terminalStubs());
     await run(t, 'pwd');
     await run(t, 'whoami');
     await run(t, 'echo $HOME');
-    expect(lines(t)).toContain('/Desktop');
+    expect(lines(t)).toContain('/');
     expect(lines(t)).toContain('tester');
-    expect(lines(t)).toContain('/Desktop'); // HOME=/Desktop via makeDefaultVariables
+    expect(lines(t)).toContain('/'); // HOME is the mounted user's filesystem root
   });
 
   it('reports unknown commands as shell-red errors', async () => {
@@ -295,14 +332,14 @@ describe('Terminal app (js/apps/terminal)', () => {
     const t = await boot(terminalStubs());
     await run(t, 'mkdir docs');
     await run(t, 'ls');
-    expect(lines(t)).toContain('docs/');
+    expect(lines(t).some((line) => line.split(/\s+/).includes('docs/'))).toBe(true);
 
     await run(t, 'rmdir docs');
     t.input.dispatchEvent(new t.window.KeyboardEvent('keydown', {
       key: 'l', ctrlKey: true, bubbles: true, cancelable: true,
     }));
     await run(t, 'ls');
-    expect(lines(t)).not.toContain('docs/');
+    expect(lines(t).every((line) => !line.split(/\s+/).includes('docs/'))).toBe(true);
     // mkdir errors surface from the real handler
     await run(t, 'mkdir');
     expect(lines(t)).toContain('mkdir: missing operand');

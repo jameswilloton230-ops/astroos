@@ -256,6 +256,15 @@
 
   window.SystemServiceLoader = Object.freeze({
     load,
+    unregisterService: id => {
+      if (typeof AppRegistry === 'undefined' ||
+          typeof AppRegistry.unregisterSystemService !== 'function') return false;
+      const removed = AppRegistry.unregisterSystemService(id);
+      if (!removed) return false;
+      const index = loadedServices.findIndex(service => service.id === id);
+      if (index !== -1) loadedServices.splice(index, 1);
+      return true;
+    },
     listLoadedServices: () => loadedServices.map(service => ({ ...service })),
   });
 

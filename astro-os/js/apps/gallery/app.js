@@ -317,7 +317,7 @@ registerApp({
         const showImage = url => {
           if (!url || !card.isConnected) return;
           const img = createEl('img', {
-            style: 'width:100%;height:100%;object-fit:cover;',
+            style: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;',
             alt: f.name,
             draggable: 'false',
             loading: 'lazy',
@@ -329,9 +329,13 @@ registerApp({
             card.insertBefore(icon, card.firstChild);
           });
           img.src = url;
+          card.querySelector('[data-image-placeholder]')?.remove();
           card.insertBefore(img, card.firstChild);
         };
-        const icon = createEl('div', { style: 'color:var(--text-muted);' });
+        const icon = createEl('div', {
+          style: 'color:var(--text-muted);',
+          'data-image-placeholder': '',
+        });
         icon.innerHTML = svgIcon('image', 24);
         card.appendChild(icon);
         void getUrl(f).then(showImage);

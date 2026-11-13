@@ -1,0 +1,6 @@
+# Computed locally from the GitHub archive of tag 0.20.3; the previous pin
+# (e252a8e0...) failed the gl-debug ISO build. Same LICENSE hash below.
+sha256  1e70a5b74f149c5b47da76063dbdf967c44b2d7b6e94d3fdf65f70fc252f65c9  labwc-0.20.3.tar.gz
+
+# Hashes for license files:
+sha256  8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643  LICENSE

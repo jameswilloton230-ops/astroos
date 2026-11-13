@@ -56,6 +56,11 @@ describe('workers.js (js/core/services/workers.js)', () => {
       return runWorkerCode(window.FS_WORKER_CODE, { indexedDB: blockedIndexedDB });
     }
 
+    async function call(w, method, ...args) {
+      await w.self.onmessage({ data: { id: Math.random().toString(36).slice(2), method, args } });
+      return w.posted.at(-1);
+    }
+
     it('init reports success and putSetting/getSetting round-trip a value', async () => {
       const w = fsWorker();
       await w.self.onmessage({ data: { id: 1, method: 'init', args: [] } });
@@ -66,6 +71,82 @@ describe('workers.js (js/core/services/workers.js)', () => {
 
       await w.self.onmessage({ data: { id: 3, method: 'getSetting', args: ['theme'] } });
       expect(w.posted.at(-1)).toEqual({ id: 3, result: 'nova-dark' });
+    });
+
+    describe('multi-user owner scoping', () => {
+      it('setOwner partitions trees — another account never sees my rows', async () => {
+        const w = fsWorker();
+        await call(w, 'init');
+        await call(w, 'setOwner', 'uA');
+        await call(w, 'putFiles', [{ id: 'a1', name: 'mine.txt', content: 'x' }]);
+        await call(w, 'setOwner', 'uB');
+        expect((await call(w, 'getAllFiles')).result).toEqual([]);
+        await call(w, 'setOwner', 'uA');
+        expect((await call(w, 'getAllFiles')).result.map((f) => f.id)).toEqual(['a1']);
+        // Machine scope (null owner) sees only unscoped rows — uA's rows
+        // are invisible there too, which is what logout re-roots onto.
+        await call(w, 'setOwner', null);
+        expect((await call(w, 'getAllFiles')).result).toEqual([]);
+      });
+
+      it('writes stamp the active owner; the __shared__ drop box is exempt', async () => {
+        const w = fsWorker();
+        await call(w, 'init');
+        await call(w, 'setOwner', 'uA');
+        await call(w, 'putFiles', [{ id: 's1', name: 'drop.txt', ownerUid: '__shared__' }, { id: 'o1', name: 'own.txt' }]);
+        await call(w, 'setOwner', 'uB');
+        const seen = (await call(w, 'getAllFiles')).result;
+        expect(seen.map((f) => f.id)).toEqual(['s1']); // shared rides along
+        expect(seen.find((f) => f.id === 's1').ownerUid).toBe('__shared__');
+        // o1 was stamped to uA at write time — uB never sees it.
+        expect(seen.some((f) => f.id === 'o1')).toBe(false);
+        await call(w, 'setOwner', 'uA');
+        expect((await call(w, 'getAllFiles')).result.map((f) => f.id).sort()).toEqual(['o1', 's1']);
+      });
+
+      it('guest mounts see neither other trees nor the __shared__ drop box', async () => {
+        const w = fsWorker();
+        await call(w, 'init');
+        await call(w, 'setOwner', 'uA');
+        await call(w, 'putFiles', [{ id: 'a1', name: 'mine.txt' }, { id: 's1', name: 'shared.txt', ownerUid: '__shared__' }]);
+        await call(w, 'setOwner', 'guest_zzz');
+        await call(w, 'putFiles', [{ id: 'g1', name: 'scratch.txt' }]);
+        expect((await call(w, 'getAllFiles')).result.map((f) => f.id)).toEqual(['g1']);
+      });
+
+      it('purgeGuestOwners removes every guest_ row and nothing else', async () => {
+        const w = fsWorker();
+        await call(w, 'init');
+        await call(w, 'setOwner', 'uA');
+        await call(w, 'putFiles', [{ id: 'a1', name: 'mine.txt' }]);
+        await call(w, 'setOwner', 'guest_one');
+        await call(w, 'putFiles', [{ id: 'g1', name: 'gone.txt' }]);
+        await call(w, 'setOwner', 'guest_two');
+        await call(w, 'putFiles', [{ id: 'g2', name: 'gone2.txt' }]);
+
+        const purged = (await call(w, 'purgeGuestOwners')).result;
+        expect(purged).toBe(2);
+        await call(w, 'setOwner', 'uA');
+        expect((await call(w, 'getAllFiles')).result.map((f) => f.id)).toEqual(['a1']);
+        // Idempotent: a second sweep has nothing left to do.
+        expect((await call(w, 'purgeGuestOwners')).result).toBe(0);
+      });
+
+      it('stampOwner claims unscoped rows for the owner exactly once', async () => {
+        const w = fsWorker();
+        await call(w, 'init');
+        await call(w, 'putFiles', [
+          { id: 'l1', name: 'legacy.txt' },
+          { id: 'l2', name: 'legacy2.txt' },
+        ]);
+        const first = (await call(w, 'stampOwner', 'uOwner')).result;
+        expect(first).toEqual({ stamped: 2 });
+        // Idempotent behind the settings marker.
+        const second = (await call(w, 'stampOwner', 'uOwner')).result;
+        expect(second).toEqual({ stamped: 0, alreadyDone: true });
+        await call(w, 'setOwner', 'uOwner');
+        expect((await call(w, 'getAllFiles')).result.map((f) => f.id).sort()).toEqual(['l1', 'l2']);
+      });
     });
 
     it('getAllSettings returns the key/value map, missing keys come back undefined', async () => {

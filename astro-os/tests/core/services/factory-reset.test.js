@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-const { clearDirectoryContents, isNbospLinuxRuntime } = await import(
+const { clearDirectoryContents, isAstroosLinuxRuntime } = await import(
   '../../../js/core/services/factory-reset.js'
 );
 
@@ -37,12 +37,12 @@ describe('factory reset', () => {
   });
 
   it('only identifies the installed AstroOS Linux runtime from its explicit home and data path', () => {
-    expect(isNbospLinuxRuntime({
+    expect(isAstroosLinuxRuntime({
       platform: 'linux',
       home: '/home/astroos',
       dataDirectory: '/home/astroos/.config/novabyte/runtime',
     })).toBe(true);
-    expect(isNbospLinuxRuntime({
+    expect(isAstroosLinuxRuntime({
       platform: 'linux',
       home: '/home/other',
       dataDirectory: '/home/other/.config/novabyte/runtime',

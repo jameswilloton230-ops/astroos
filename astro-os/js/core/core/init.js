@@ -119,8 +119,8 @@ document.addEventListener('DOMContentLoaded', function () {
 // place that can still get the machine into recovery.
 //
 // Recovery itself is the Linux environment (/usr/sbin/astroos-recovery), not a
-// web page. The desktop runs as the kiosk user inside cage and can't show a
-// text console, so it leaves a one-shot request file for /etc/init.d/S99astroos
+// web page. The desktop runs as the kiosk user inside labwc and can't show a
+// text console (it runs under the labwc compositor), so it leaves a one-shot request file for /etc/init.d/S99astroos
 // and restarts; the next boot comes up in the recovery menu.
 (function () {
   const RECOVERY_FORCE_KEY  = 'nova_force_recovery';
@@ -130,7 +130,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const REQUEST_FILE        = '/home/astroos/.config/novabyte/recovery-request';
   const POWER_HELPER        = '/usr/bin/astroos-power';
 
-  function isNbospLinux() {
+  function isAstroosLinux() {
     try {
       return typeof require === 'function'
         && process.platform === 'linux'
@@ -172,7 +172,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Off AstroOS Linux (dev in a browser or plain NW.js) there is nothing to
     // hand off to. Say so instead of reloading in a loop.
-    if (!isNbospLinux()) {
+    if (!isAstroosLinux()) {
       showBootFailure(reason, 'Recovery is only available on AstroOS. Clear site data and reload to try again.');
       requested = false;
       return;
@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  window.NovaRecovery = Object.freeze({ isAvailable: isNbospLinux, request: requestRecovery });
+  window.NovaRecovery = Object.freeze({ isAvailable: isAstroosLinux, request: requestRecovery });
 
   // Left behind by the previous session: Settings > "Boot to Recovery", or a
   // boot the watchdog below / the main script gave up on. These reads use the

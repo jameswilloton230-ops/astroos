@@ -976,6 +976,30 @@
     return EMOJI_RE.test(str);
   }
 
+  // SECURITY (2026-11-12 audit, finding F3): every icon string that flows
+  // into an attribute is HTML-escaped here, whatever the caller passed.
+  // Icon values arrive from untrusted sources (installed .novaapp manifest
+  // icons, .lnk shortcut-file content, web-app records), and this function
+  // feeds ~80 innerHTML sinks in the privileged Node-context shell — a raw
+  // injection is host-level RCE, so no branch interpolates unescaped input
+  // anymore.
+  function escapeAttr(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  // Emoji content is embedded as element text, so it needs entity escaping
+  // for element content, not attribute escaping.
+  function escapeIconText(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
   function svgIcon(name, size) {
     const safeSize = coerceIconSize(size);
 
@@ -983,19 +1007,25 @@
       // Escape characters that would break out of the src attribute. Valid
       // data: URLs never contain raw " or <, but we defend against malformed
       // input.
-      const safeSrc = String(name)
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/</g, '&lt;');
+      const safeSrc = escapeAttr(name);
       return '<img src="' + safeSrc + '" width="' + safeSize + '" height="' + safeSize +
         '" style="display:inline-block;vertical-align:middle;object-fit:contain;pointer-events:none;"' +
         ' draggable="false" alt="" aria-hidden="true" data-hide-on-error>';
     }
 
     if (typeof name === 'string' && name.startsWith('/assets/')) {
-      return '<img src="' + name + '" width="' + safeSize + '" height="' + safeSize +
+      // Only serve straight, traversal-free asset paths; anything else the
+      // caller smuggled in (quotes, tags, query fragments) is escaped so it
+      // cannot break out of the src attribute.
+      if (/^\/assets\/[A-Za-z0-9._\/-]+$/.test(name)) {
+        return '<img src="' + name + '" width="' + safeSize + '" height="' + safeSize +
+          '" style="display:inline-block;vertical-align:middle;object-fit:contain;pointer-events:none;"' +
+          ' draggable="false" alt="" aria-hidden="true">';
+      }
+      const safeAsset = escapeAttr(name);
+      return '<img src="' + safeAsset + '" width="' + safeSize + '" height="' + safeSize +
         '" style="display:inline-block;vertical-align:middle;object-fit:contain;pointer-events:none;"' +
-        ' draggable="false" alt="" aria-hidden="true">';
+        ' draggable="false" alt="" aria-hidden="true" data-hide-on-error>';
     }
 
     // Web apps (WebAppManager) store their icon as a plain emoji character
@@ -1005,9 +1035,14 @@
     // and gets hidden by data-hide-on-error — leaving pinned web apps with
     // no icon on the desktop/taskbar. Render emoji as text instead.
     if (typeof name === 'string' && isEmoji(name)) {
+      // Emoji detection is a contains-test, not a whitelist: a string like
+      // '\u{1F310}<img src=x onerror=…>' qualifies as "emoji". Escape the
+      // whole string for element content so any payload rides along as
+      // visible text instead of live markup.
+      const safeEmoji = escapeIconText(name);
       return '<span style="display:inline-flex;align-items:center;justify-content:center;' +
         'width:' + safeSize + 'px;height:' + safeSize + 'px;font-size:' + Math.round(safeSize * 0.82) +
-        'px;line-height:1;" aria-hidden="true">' + name + '</span>';
+        'px;line-height:1;" aria-hidden="true">' + safeEmoji + '</span>';
     }
 
     const cacheKey = name + '|' + safeSize;

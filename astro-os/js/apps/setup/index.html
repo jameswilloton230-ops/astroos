@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AstroOS Setup</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Sandboxed fallback document. AstroOS Setup is a first-party system
+       app: at runtime it launches through its unrestrictedEntry (app.js) in
+       the trusted host, where it can call SessionManager.setupOwner. This
+       page is the package's sandboxed entry — it only ever renders when the
+       trusted-host launch path is unavailable (e.g. a broken bundle), and it
+       explains that instead of pretending to be the wizard. -->
+  <main class="setup-fallback" role="main">
+    <div class="setup-fallback-card">
+      <h1>AstroOS Setup</h1>
+      <p>First-boot setup runs in AstroOS&rsquo;s trusted host and cannot start
+         inside the app sandbox.</p>
+      <p class="setup-fallback-hint">If you are seeing this page during first
+         boot, the AstroOS Setup system package is damaged &mdash; restart the
+         machine. If every restart lands here, reinstall AstroOS.</p>
+    </div>
+  </main>
+</body>
+</html>

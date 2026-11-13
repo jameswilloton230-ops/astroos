@@ -734,17 +734,24 @@ describe('AstroOS Registry engine v2 — settings schema & legacy adoption', () 
     expect(Reg.SETTINGS_KEY_TO_PATH.defaultApps).toBe('HKNU/shell/defaultApps');
     expect(Reg.SETTINGS_KEY_TO_PATH.osVersion).toBe('HKNS/system/osVersion');
     expect(Reg.SETTINGS_KEY_TO_PATH.devMode).toBe('HKNS/system/devMode');
-    expect(Reg.SETTINGS_KEY_TO_PATH.lockPin).toBe('HKNS/security/lockPin');
-    expect(Reg.SETTINGS_KEY_TO_PATH.pinSalt).toBe('HKNS/security/pinSalt');
+    // Multi-user account redesign: credential keys left the settings map —
+    // lockPin/pinSalt/biometricCredentialId live in the server's users.db and
+    // the account record owns identity, so `username` is unmapped too.
+    expect(Reg.SETTINGS_KEY_TO_PATH.lockPin).toBeUndefined();
+    expect(Reg.SETTINGS_KEY_TO_PATH.pinSalt).toBeUndefined();
+    expect(Reg.SETTINGS_KEY_TO_PATH.biometricCredentialId).toBeUndefined();
+    expect(Reg.SETTINGS_KEY_TO_PATH.username).toBeUndefined();
     expect(Reg.SETTINGS_KEY_TO_PATH.prohibitWallpaperChange).toBe('HKNS/security/policy/prohibitWallpaperChange');
     expect(Reg.SETTINGS_KEY_TO_PATH.clockFormat).toBe('HKNU/settings/clockFormat');
-    expect(Reg.SETTINGS_KEY_TO_PATH.username).toBe('HKNU/settings/username');
   });
 
   it('resolves paths: mapped keys win, excluded keys return null, unknown keys file under HKNU/settings', () => {
     expect(Reg.settingsPathFor('theme')).toBe('HKNS/shell/theme');
     expect(Reg.settingsPathFor('pinnedApps')).toBe('HKNU/desktop/pins');
-    expect(Reg.settingsPathFor('lockPin')).toBe('HKNS/security/lockPin');
+    // Retired credential keys are unmapped: they file under HKNU/settings/*
+    // (empty by default — the migration deletes the legacy values) instead of
+    // the old HKNS/security credential paths.
+    expect(Reg.settingsPathFor('lockPin')).toBe('HKNU/settings/lockPin');
     expect(Reg.settingsPathFor('customWallpaper')).toBeNull();
     expect(Reg.SETTINGS_EXCLUDED_KEYS.has('customWallpaper')).toBe(true);
     expect(Reg.settingsPathFor('someFuturePref')).toBe('HKNU/settings/someFuturePref');

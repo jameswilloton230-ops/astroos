@@ -219,7 +219,7 @@ registerApp({
     let favorites = devLoad('favorites', []);   // [{ path }]
     let jumpHistory = devLoad('history', []);   // [path]
 
-    content.style.cssText = 'display:flex;flex-direction:column;height:100%;background:var(--bg-default,#0f1115);color:var(--text-primary,#e6e6e6);font-family:var(--font-ui,sans-serif);font-size:12px;box-sizing:border-box;overflow:hidden;';
+    content.style.cssText = 'display:flex;flex-direction:column;height:100%;background:var(--bg-base);color:var(--text-primary);font-family:var(--font-ui,sans-serif);font-size:12px;box-sizing:border-box;overflow:hidden;';
 
     // ── helpers ────────────────────────────────────────────────────────
     const el = (tag, style, text) => {
@@ -239,14 +239,14 @@ registerApp({
     function errorMessage(err) { return (err && err.message) ? err.message : String(err); }
 
     // Display names for HKNA/<appId> and HKNU/software/<appId> come from the
-    // installed-app inventory (HKNS/apps/installed); cached until a registry
+    // installed-app inventory (system packages in HKNS, the account's own in HKNU); cached until a registry
     // change invalidates it. Everything else resolves through the static
     // keyInfo catalog at the top of this file.
     let inventoryCache = null;
     function appDisplayName(appId) {
       if (!inventoryCache) {
         let installed = null;
-        try { installed = Reg.get('HKNS/apps/installed'); } catch (_) { /* unreadable — fall through */ }
+        try { installed = window.RegistrySystemState?.installedApps?.() ?? Reg.get('HKNS/apps/installed'); } catch (_) { /* unreadable — fall through */ }
         inventoryCache = Array.isArray(installed) ? installed : [];
       }
       const hit = inventoryCache.find((app) => app && app.id === appId);
@@ -327,7 +327,7 @@ registerApp({
 
     function btnStyle(primary) {
       return 'padding:5px 10px;' + (primary
-        ? 'background:var(--accent,#58a6ff);color:#fff;border:none;'
+        ? 'background:var(--accent);color:var(--text-primary);border:none;'
         : 'background:transparent;color:var(--text-muted,#9aa4b2);border:1px solid var(--border-subtle,#2a2f3a);') +
         'border-radius:4px;cursor:pointer;font-size:11px;flex-shrink:0;';
     }
@@ -392,7 +392,7 @@ registerApp({
       row.append(caret, label);
       if (path === selectedPath) row.style.background = 'var(--accent-muted,rgba(88,166,255,0.15))';
       if (isFavorite(path)) {
-        row.appendChild(el('span', 'color:#f5b301;margin-left:2px;', '★'));
+        row.appendChild(el('span', 'color:var(--text-warning);margin-left:2px;', '★'));
       }
       const info = infoOf(path);
       row.title = info ? info.label + '\n' + path + (info.description ? '\n' + info.description : '') : path;
@@ -628,7 +628,7 @@ registerApp({
     }
 
     function popoverItem(pop, label, onClick, danger) {
-      const item = el('div', 'padding:5px 10px;border-radius:4px;cursor:pointer;white-space:nowrap;color:' + (danger ? '#f85149' : 'var(--text-primary)') + ';', label);
+      const item = el('div', 'padding:5px 10px;border-radius:4px;cursor:pointer;white-space:nowrap;color:' + (danger ? 'var(--text-danger)' : 'var(--text-primary)') + ';', label);
       item.addEventListener('mouseenter', () => { item.style.background = 'var(--accent-muted,rgba(88,166,255,0.15))'; }, { signal: ac.signal });
       item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; }, { signal: ac.signal });
       item.addEventListener('click', () => { pop.remove(); onClick(); }, { signal: ac.signal });
@@ -704,10 +704,10 @@ registerApp({
         row.append(
           el('span', 'color:var(--text-muted,#9aa4b2);', new Date(entry.ts).toLocaleTimeString()),
           el('span', 'color:var(--accent,#58a6ff);', entry.actor),
-          el('span', 'color:#d2a8ff;', entry.action),
+          el('span', 'color:var(--text-link);', entry.action),
           el('span', 'color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;', entry.path),
           el('span', 'color:var(--text-muted,#9aa4b2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;', entry.before === null ? '—' : entry.before),
-          el('span', 'color:#7ee787;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;', entry.after === null ? '—' : entry.after),
+          el('span', 'color:var(--text-success);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;', entry.after === null ? '—' : entry.after),
         );
         row.title = entry.path + '\n' + (entry.before ?? '∅') + ' → ' + (entry.after ?? '∅');
         auditTable.appendChild(row);
@@ -782,7 +782,7 @@ registerApp({
         info.textContent = results.length ? results.length + ' match(es)' + (results.length >= 200 ? ' (capped)' : '') : 'No matches.';
         for (const result of results) {
           const row = el('div', 'padding:4px 8px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;gap:8px;align-items:baseline;');
-          row.appendChild(el('span', 'color:#d2a8ff;font-size:10px;width:70px;flex-shrink:0;', result.kind));
+          row.appendChild(el('span', 'color:var(--text-link);font-size:10px;width:70px;flex-shrink:0;', result.kind));
           row.appendChild(el('span', 'font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;', result.path));
           const keyPath = result.kind === 'key' ? result.path : keyOf(result.path);
           const finfo = infoOf(keyPath);
@@ -871,7 +871,7 @@ registerApp({
 
       const addRowBtn = el('button', btnStyle(false), '+ Entry');
       addRowBtn.addEventListener('click', () => addEntryRow(null), { signal: ac.signal });
-      const errorLine = el('div', 'margin-top:6px;color:#f85149;font-size:11px;min-height:14px;');
+      const errorLine = el('div', 'margin-top:6px;color:var(--text-danger);font-size:11px;min-height:14px;');
       const clearBtn = el('button', btnStyle(false), 'Clear ACL');
       const { row: btnRow, save } = closeButtonRow(box);
       btnRow.prepend(clearBtn);
@@ -973,7 +973,7 @@ registerApp({
       return { back, box };
     }
 
-    function fieldStyle() { return 'width:100%;padding:6px 8px;background:var(--bg-default,#0f1115);border:1px solid var(--border-subtle,#2a2f3a);border-radius:4px;color:var(--text-primary);font-family:monospace;font-size:11px;box-sizing:border-box;'; }
+    function fieldStyle() { return 'width:100%;padding:6px 8px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:4px;color:var(--text-primary);font-family:monospace;font-size:11px;box-sizing:border-box;'; }
 
     function closeButtonRow(box, onCancel) {
       const row = el('div', 'display:flex;gap:8px;justify-content:flex-end;margin-top:12px;');
@@ -995,7 +995,7 @@ registerApp({
       box.appendChild(row);
       const submit = () => {
         const name = input.value.trim();
-        if (!name || /[\/\\]/.test(name) || name === '.' || name === '..') { input.style.borderColor = '#f85149'; return; }
+        if (!name || /[\/\\]/.test(name) || name === '.' || name === '..') { input.style.borderColor = 'var(--text-danger)'; return; }
         backClose(box);
         onSubmit(name);
       };
@@ -1088,7 +1088,7 @@ registerApp({
 
       // REG_BINARY: hex grid viewer + hex edit mode.
       const binWrap = el('div', 'display:none;flex-direction:column;gap:4px;');
-      const hexGrid = el('pre', 'margin:0;padding:8px;background:var(--bg-default,#0f1115);border:1px solid var(--border-subtle,#2a2f3a);border-radius:4px;font-family:monospace;font-size:10px;color:#7ee787;max-height:140px;overflow:auto;white-space:pre;');
+      const hexGrid = el('pre', 'margin:0;padding:8px;background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:4px;font-family:monospace;font-size:10px;color:var(--text-success);max-height:140px;overflow:auto;white-space:pre;');
       const binEditBtn = el('button', btnStyle(false), 'Edit as hex');
       binEditBtn.addEventListener('click', () => {
         try {
@@ -1139,7 +1139,7 @@ registerApp({
       paintRadix();
       syncEditorForType(typeSelect.value);
 
-      const errorLine = el('div', 'margin-top:8px;color:#f85149;font-size:11px;min-height:14px;');
+      const errorLine = el('div', 'margin-top:8px;color:var(--text-danger);font-size:11px;min-height:14px;');
       box.append(nameLabel, nameInput, typeLabel, typeSelect, dataLabel, dataInput, boolWrap, radixWrap, multiHint, expandHint, binWrap, errorLine);
 
       const { row, save } = closeButtonRow(box);

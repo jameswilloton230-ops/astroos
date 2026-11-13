@@ -1,27 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { initApp, loadWindowApp } from '../helpers/app-harness.js';
 
 const installerSource = readFileSync(
   new URL('../../js/apps/install-astroos/app.js', import.meta.url),
   'utf8',
 );
 
-function registerInstallerForCommandLine(commandLine, readError) {
+function registerInstallerForCommandLine(commandLine) {
   const registeredApps = [];
-  const logger = { error: vi.fn() };
   const context = vm.createContext({
     window: { __novaUnrestrictedPackage: { files: {} } },
     process: { platform: 'linux' },
-    console: logger,
+    console: { error: vi.fn() },
     require(name) {
-      if (name !== 'fs') throw new Error(`Unexpected module: ${name}`);
-      return {
-        readFileSync() {
-          if (readError) throw readError;
-          return commandLine;
-        }
-      };
+      if (name === 'fs') {
+        return { readFileSync: () => commandLine };
+      }
+      throw new Error(`Unexpected module during registration: ${name}`);
     },
     registerApp(app) {
       registeredApps.push(app);
@@ -29,11 +26,11 @@ function registerInstallerForCommandLine(commandLine, readError) {
   });
 
   vm.runInContext(installerSource, context);
-  return { registeredApps, logger };
+  return { registeredApps };
 }
 
 async function removeInstallerFromSession() {
-  const registeredApps = [{ id: 'com.astroos.install' }];
+  const registeredApps = [];
   const deletedFiles = [];
   const settingWrites = [];
   const shortcut = {
@@ -88,27 +85,72 @@ async function removeInstallerFromSession() {
 }
 
 describe('AstroOS installer availability', () => {
-  it('registers the installer in the live ISO session', () => {
+  it('registers the installer on live and installed-root kernel command lines', () => {
     const { registeredApps } = registerInstallerForCommandLine('quiet boot=live');
+    const installedRoot = registerInstallerForCommandLine('quiet root=PARTUUID=1234-01 rw');
 
     expect(registeredApps).toHaveLength(1);
     expect(registeredApps[0].id).toBe('com.astroos.install');
+    expect(installedRoot.registeredApps).toHaveLength(1);
+    expect(installedRoot.registeredApps[0].id).toBe('com.astroos.install');
   });
 
-  it('does not register the installer after booting from an installed root disk', () => {
-    const { registeredApps } = registerInstallerForCommandLine('quiet root=PARTUUID=1234-01 rw');
+  it('uses a native disk dropdown and keeps confirmation controls responsive', async () => {
+    const fs = {
+      readdirSync: () => ['vda', 'sr0'],
+      statSync: device => ({ isBlockDevice: () => device === '/dev/vda' }),
+      readFileSync: path => path.endsWith('/size') ? '2097152' : 'AstroOS test disk',
+    };
+    const loaded = await loadWindowApp('install-astroos', {
+      stubs: {
+        extra: {
+          process: { platform: 'linux' },
+          require: name => {
+            if (name === 'fs') return fs;
+            throw new Error(`Unexpected module: ${name}`);
+          },
+        },
+      },
+    });
+    const content = initApp(loaded.app, { window: loaded.window });
+    const select = content.querySelector('select[aria-label="Installation disk"]');
+    const continueButton = [...content.querySelectorAll('button')]
+      .find(button => button.textContent === 'Review disk');
 
-    expect(registeredApps).toHaveLength(0);
-  });
+    expect(select).toBeTruthy();
+    expect(select.options).toHaveLength(2);
+    expect(select.options[1].textContent).toContain('/dev/vda');
+    expect(continueButton.disabled).toBe(true);
 
-  it('logs a command-line detection error and leaves the installer available', () => {
-    const { registeredApps, logger } = registerInstallerForCommandLine(
-      '',
-      new Error('proc unavailable'),
-    );
+    select.value = '/dev/vda';
+    select.dispatchEvent(new loaded.window.Event('change'));
+    expect(continueButton.disabled).toBe(false);
+    continueButton.click();
 
-    expect(registeredApps).toHaveLength(1);
-    expect(logger.error).toHaveBeenCalled();
+    const warning = [...content.querySelectorAll('div')]
+      .find(element => element.textContent.includes('permanently erases every partition'));
+    const footer = content.querySelector('.astroos-installer-footer');
+    const backButton = [...footer.querySelectorAll('button')]
+      .find(button => button.textContent === 'Back');
+    const eraseButton = [...footer.querySelectorAll('button')]
+      .find(button => button.textContent === 'Erase and install');
+
+    expect(warning).toBeTruthy();
+    expect(backButton).toBeTruthy();
+    expect(eraseButton).toBeTruthy();
+    expect(content.querySelector('.astroos-installer-body').style.overflowY).toBe('auto');
+    expect(footer.style.flexWrap).toBe('wrap');
+    expect(backButton.style.flex).toContain('150px');
+    expect(eraseButton.style.flex).toContain('150px');
+    expect(eraseButton.disabled).toBe(true);
+
+    const confirmation = content.querySelector('input[aria-label="Type ERASE /dev/vda to confirm"]');
+    confirmation.value = 'ERASE /dev/sda';
+    confirmation.dispatchEvent(new loaded.window.Event('input'));
+    expect(eraseButton.disabled).toBe(true);
+    confirmation.value = 'ERASE /dev/vda';
+    confirmation.dispatchEvent(new loaded.window.Event('input'));
+    expect(eraseButton.disabled).toBe(false);
   });
 
   it('removes its desktop shortcut, taskbar pin, and runtime registrations after install', async () => {

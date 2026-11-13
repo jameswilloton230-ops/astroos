@@ -7,7 +7,7 @@ import http from 'node:http';
 import https from 'node:https';
 
 // Real configureSSL (ssl.test.js mocks it for the bootstrap tests) + real
-// certs from the shared openssl seeder, so the plaintext-into-TLS-port
+// certs from the shared X.509 seeder, so the plaintext-into-TLS-port
 // behavior is exercised against an actual https.Server, not a mock.
 import { configureSSL, isPlainHttpRequestToTlsPort, respondPlainHttpOverRawSocket } from '../../server/core/ssl.js';
 import { seedCerts } from './helpers/seed-certs.js';

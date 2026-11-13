@@ -108,6 +108,17 @@
     return EXT_TO_MIME[ext] || 'application/octet-stream';
   }
 
+  function openFile(f) {
+    if (!f) return;
+    const detectedMimeType = detectMimeFromName(f.name);
+    const detectedMediaType = detectedMimeType.startsWith('image/') || detectedMimeType.startsWith('audio/');
+    const mimeType = !f.mimeType || f.mimeType === 'application/octet-stream' ||
+      (detectedMediaType && !f.mimeType.startsWith(detectedMimeType.split('/')[0] + '/'))
+      ? detectedMimeType
+      : f.mimeType;
+    openFileWithDefaultApp(mimeType === f.mimeType ? f : { ...f, mimeType });
+  }
+
   function isNovaPackage(name) {
     return typeof name === 'string' && name.toLowerCase().endsWith('.novaapp');
   }
@@ -316,7 +327,20 @@
       });
       this.emptyTrashBtn.innerHTML = svgIcon('trash', 16);
 
-      toolbar.append(this.backBtn, this.upBtn, pathBarWrap, this.searchInput, this.emptyTrashBtn);
+      // Account chip: whose tree is mounted. Multi-user machines show the
+      // signed-in account's username beside the navigation, so the app makes
+      // it visible which account's filesystem (~/users/<username>/) you are
+      // browsing; single-user and guest sessions show nothing.
+      this.accountChip = createEl('span', {
+        className: 'browser-account-chip',
+        title: 'Signed-in account',
+        style: 'display:none;align-self:center;margin:0 6px 0 2px;padding:3px 10px;' +
+          'border-radius:999px;background:var(--bg-sunken,#e8e8ee);color:var(--text-muted,#666);' +
+          'font-size:12px;font-weight:600;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;',
+      });
+      this.updateAccountChip();
+
+      toolbar.append(this.accountChip, this.backBtn, this.upBtn, pathBarWrap, this.searchInput, this.emptyTrashBtn);
       root.appendChild(toolbar);
 
       // Files area: icon view + list view (only one visible at a time)
@@ -435,6 +459,23 @@
       if (document.activeElement !== this.pathBar) {
         this.pathBar.value = FS.getPath(this.nav.cwd);
       }
+    }
+
+    // Refresh the account chip from the trusted scope module. The username
+    // is what the per-user filesystem root is keyed by (users/<username>),
+    // so the chip IS the detection of "which account's files am I in".
+    updateAccountChip() {
+      if (!this.accountChip) return;
+      const scope = (typeof NovaUserScope !== 'undefined' && NovaUserScope) || null;
+      const uname = scope && typeof scope.activeUsername === 'function'
+        ? String(scope.activeUsername() || '') : '';
+      if (!uname) {
+        this.accountChip.style.display = 'none';
+        return;
+      }
+      this.accountChip.textContent = uname;
+      this.accountChip.title = `Browsing ${uname}'s account tree (users/${uname})`;
+      this.accountChip.style.display = 'inline-block';
     }
 
     // Ensure the canonical system folders exist at the root. Best-effort:
@@ -726,7 +767,7 @@
         if (!item?._fileNode) return;
         const f = item._fileNode;
         if (f.type === 'folder') this.navigateTo(f.id);
-        else openFileWithDefaultApp(f);
+        else openFile(f);
       }, { signal: this.signal });
 
       parent.addEventListener('contextmenu', (e) => {
@@ -778,7 +819,7 @@
           label: 'Open', icon: 'eye',
           action: () => {
             if (f.type === 'folder') this.navigateTo(f.id);
-            else openFileWithDefaultApp(f);
+            else openFile(f);
           },
         },
       ];
@@ -1272,7 +1313,10 @@
       this.path = require('path');
       this.os = require('os');
       this.childProcess = require('child_process');
-      this.currentPath = this.path.resolve(options.path || this.os.homedir());
+      this.homePath = typeof FS !== 'undefined' && typeof FS.rootId === 'string'
+        ? FS.rootId
+        : this.os.homedir();
+      this.currentPath = this.path.resolve(options.path || this.homePath);
       this.state._linuxPath = this.currentPath;
       this.selectedPath = null;
       this.selectedPaths = new Set();
@@ -1307,7 +1351,7 @@
       };
       toolbar.append(
         button('Up', 'Open parent folder', () => this.goUp()),
-        button('Home', 'Open home folder', () => this.navigate(this.os.homedir())),
+        button('Home', 'Open home folder', () => this.navigate(this.homePath)),
         button('New folder', 'Create a folder', () => this.createEntry(true)),
         button('New file', 'Create an empty file', () => this.createEntry(false)),
         button('Refresh', 'Refresh folder', () => this.render())
@@ -1543,7 +1587,7 @@
             /\.(?:mp3|mp4|m4a|ogg|wav|flac|aac|opus|weba|webm|jpg|jpeg|png|gif|webp|bmp|svg|avif|tif|tiff)$/i.test(entry.name)) {
           file.mimeType = detectMimeFromName(entry.name);
         }
-        openFileWithDefaultApp(file);
+        openFile(file);
       } else if (entry.executable) {
         await this.runExecutable(entry.path);
       } else {
@@ -1935,7 +1979,10 @@
           if (!isValidFileName(file.name)) throw new Error('File name is not valid.');
           const fs = require('fs').promises;
           const path = require('path');
-          const destination = path.resolve(state?._linuxPath || require('os').homedir(), file.name);
+          const home = typeof FS !== 'undefined' && typeof FS.rootId === 'string'
+            ? FS.rootId
+            : require('os').homedir();
+          const destination = path.resolve(state?._linuxPath || home, file.name);
           await fs.writeFile(destination, Buffer.from(await file.arrayBuffer()), { flag: 'wx' });
           Notify.show({ title: 'File Added', body: file.name, type: 'success', appName: 'Files' });
         } catch (err) {

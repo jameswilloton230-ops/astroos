@@ -2,6 +2,7 @@
   const STORE_ID = 'com.astroos.store';
   const STORE_BASE_URL = 'https://novabyteteam.github.io/novabyte-os/';
   const STORE_URL = new URL('apps.json', STORE_BASE_URL).href;
+  const STORE_FALLBACK_URL = 'https://raw.githubusercontent.com/AstroOSTeam/novabyte-os/main/src/apps.json';
   const PUBLISHER_API_BASE_URL = 'https://jcrptxtmieveoijdbtqa.supabase.co';
   const PUBLISHER_CATALOG_KEY = 'sb_publishable_K_MKjtuMcwlXJyB67Bmu3A_2vFQ2PGX';
   const APPS_KEY = 'nova_installed_apps';
@@ -467,13 +468,21 @@
       select: 'app_id,name,version,author,description,categories,icon,file,size,screenshots,links,release_notes,version_history',
       order: 'published_at.desc',
     });
+    const fetchStaticCatalog = async () => {
+      let response;
+      try {
+        response = await fetch(STORE_URL);
+      } catch (primaryError) {
+        console.warn('[AppStore] GitHub Pages catalog unavailable; trying the raw GitHub mirror.', primaryError);
+        response = await fetch(STORE_FALLBACK_URL);
+      }
+      if (!response.ok) throw new Error(`Failed to fetch app list (${response.status})`);
+      const apps = await response.json();
+      if (!Array.isArray(apps)) throw new Error('App catalog must contain a list of apps.');
+      return apps;
+    };
     const [staticResult, communityResult] = await Promise.allSettled([
-      fetch(STORE_URL).then(async response => {
-        if (!response.ok) throw new Error(`Failed to fetch app list (${response.status})`);
-        const apps = await response.json();
-        if (!Array.isArray(apps)) throw new Error('App catalog must contain a list of apps.');
-        return apps;
-      }),
+      fetchStaticCatalog(),
       fetch(`${PUBLISHER_API_BASE_URL}/rest/v1/publisher_catalog_apps?${params}`, {
         headers: {
           apikey: PUBLISHER_CATALOG_KEY,
@@ -827,7 +836,7 @@
       header.className = 'store-header';
       const brand = document.createElement('div');
       brand.className = 'store-brand';
-      brand.innerHTML = '<span class="store-brand-mark" aria-hidden="true">N</span><span><span class="store-title">NovaByte</span><span class="store-brand-subtitle">Store</span></span>';
+      brand.innerHTML = '<span class="store-brand-mark" aria-hidden="true">A</span><span><span class="store-title">AstroOS</span><span class="store-brand-subtitle">Store</span></span>';
       const settingsButton = document.createElement('button');
       settingsButton.type = 'button';
       settingsButton.className = 'store-settings-button';

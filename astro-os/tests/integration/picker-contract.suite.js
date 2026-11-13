@@ -3,7 +3,7 @@
 //
 // Written against the real app-sandbox.js dispatcher with a stubbed
 // SystemDialogs service, reproducing the exact IPC call shapes the Recipe
-// Box 2.1.0 app (com.dirazcoder.recipebox) makes:
+// Box 2.1.0 app (com.jameswilloton230-ops.recipebox) makes:
 //
 //   P1  nova:files:open   — accept may mix MIME types and .ext entries
 //                            ('.json', 'text/plain', …). Rejecting extensions
@@ -73,7 +73,7 @@ function installSystemDialogs(handler) {
 }
 function clearDialogCalls() { dialogCalls.length = 0; }
 
-const APP_ID = 'com.dirazcoder.recipebox';
+const APP_ID = 'com.jameswilloton230-ops.recipebox';
 
 async function main() {
   // ── P1: nova:files:open accepts mixed MIME + extension lists ─────────────

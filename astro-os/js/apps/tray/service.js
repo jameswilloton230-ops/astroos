@@ -305,4 +305,109 @@ async function updateBattery() {
 }
 updateBattery();
 
+// TRAY — Power menu
+
+(function setupPowerMenu() {
+  const button = document.getElementById('tray-power');
+  const menu = document.getElementById('power-menu');
+  if (!button || !menu) return;
+
+  const visibleItems = () => [...menu.querySelectorAll('[role="menuitem"]:not([hidden])')];
+
+  // Re-checked on every open: the session and the platform aren't settled
+  // yet when this script first runs.
+  function refreshItems() {
+    const isLinux = typeof process !== 'undefined' && process.platform === 'linux';
+    const canLogOff = typeof NovaUserScope !== 'undefined' && NovaUserScope?.enabled?.() &&
+      typeof SessionManager !== 'undefined' && typeof SessionManager?.logout === 'function';
+    menu.querySelector('[data-power-action="logoff"]').hidden = !canLogOff;
+    menu.querySelector('[data-power-action="restart"]').hidden = !isLinux;
+    menu.querySelector('[data-power-action="poweroff"]').hidden = !isLinux;
+    menu.querySelector('[data-power-separator]').hidden = !(canLogOff && isLinux);
+  }
+
+  menu.addEventListener('beforetoggle', (event) => {
+    if (event.newState !== 'open') return;
+    refreshItems();
+    // Nothing to offer (not Linux, no accounts): don't open an empty box.
+    if (!visibleItems().length) event.preventDefault();
+  });
+
+  menu.addEventListener('toggle', (event) => {
+    const open = event.newState === 'open';
+    button.setAttribute('aria-expanded', String(open));
+    if (open) visibleItems()[0]?.focus();
+  });
+
+  menu.addEventListener('keydown', (event) => {
+    const items = visibleItems();
+    const at = items.indexOf(document.activeElement);
+    let next = null;
+    if (event.key === 'ArrowDown') next = items[(at + 1) % items.length];
+    else if (event.key === 'ArrowUp') next = items[(at <= 0 ? items.length : at) - 1];
+    else if (event.key === 'Home') next = items[0];
+    else if (event.key === 'End') next = items[items.length - 1];
+    if (!next) return;
+    event.preventDefault();
+    next.focus();
+  });
+
+  menu.addEventListener('click', (event) => {
+    const item = event.target.closest('[data-power-action]');
+    if (!item) return;
+    menu.hidePopover?.();
+    runPowerAction(item.dataset.powerAction);
+  });
+
+  const COPY = {
+    logoff: {
+      title: 'Log off?',
+      body: 'Your apps will be closed and you will return to the sign-in screen.',
+      confirm: 'Log off',
+      danger: false,
+    },
+    restart: {
+      title: 'Restart AstroOS?',
+      body: 'The system will close running apps and restart.',
+      confirm: 'Restart',
+      danger: true,
+    },
+    poweroff: {
+      title: 'Power off AstroOS?',
+      body: 'The system will close running apps and power off.',
+      confirm: 'Power off',
+      danger: true,
+    },
+  };
+
+  async function runPowerAction(action) {
+    const copy = COPY[action];
+    if (!copy) return;
+    // No dialog means no confirmation, and we don't power off without one.
+    if (typeof showModal !== 'function') return;
+    const answer = await showModal(copy.title, copy.body, [
+      { label: 'Cancel' },
+      { label: copy.confirm, danger: copy.danger, value: 'confirm' },
+    ]);
+    if (answer !== 'confirm') return;
+
+    try {
+      if (action === 'logoff') {
+        const result = await SessionManager.logout();
+        if (result?.ok === false) throw new Error(result.message || 'Log off failed');
+        return;
+      }
+      const power = window.AstroOSSystem?.hardware?.power;
+      const run = action === 'restart' ? power?.restart : power?.powerOff;
+      if (typeof run !== 'function') throw new Error('Astro System power API is unavailable');
+      await run();
+    } catch (error) {
+      console.error(`[Tray] ${action} failed:`, error);
+      if (typeof Notify !== 'undefined') {
+        Notify.show({ title: `${copy.confirm} failed`, body: error.message, type: 'error', appName: 'System' });
+      }
+    }
+  }
+})();
+
 window.TrayService = Object.freeze({ applyVolumeToWebviews: OS.applyVolumeToWebviews });

@@ -12,12 +12,18 @@ import nodeOs from 'node:os';
 // browses an actual temp directory, exercising the true fs code paths.
 let tmpRoot;
 
-async function loadDialogs(notifyCalls = []) {
+async function loadDialogs(notifyCalls = [], userRoot = null) {
   const { window, document } = await loadServiceApp('system-dialogs', {
     stubs: {
       extra: {
         require: (mod) => ({ fs: nodeFs, path: nodePath, os: nodeOs })[mod],
         Notify: { show: (o) => notifyCalls.push(o) },
+        ...(userRoot ? {
+          FS: {
+            rootId: userRoot.id,
+            getPath: (id) => id === userRoot.id ? userRoot.path : null,
+          },
+        } : {}),
       },
     },
   });
@@ -52,6 +58,30 @@ describe('SystemDialogs service (js/apps/system-dialogs)', () => {
     expect(Object.isFrozen(svc)).toBe(false);
     expect(typeof svc.open).toBe('function');
     expect(typeof svc.save).toBe('function');
+  });
+
+  it('defaults open/import and save dialogs to the mounted account root', async () => {
+    const userRoot = { id: 'logged-in-account-root', path: tmpRoot };
+    const { window, document } = await loadDialogs([], userRoot);
+    const open = window.SystemDialogs.open();
+    await settle(80);
+    expect(pathBar(document).value).toBe(tmpRoot);
+    itemByName(document, 'alpha.txt').click();
+    confirmBtn(document).click();
+    await expect(open).resolves.toMatchObject({
+      path: nodePath.join(tmpRoot, 'alpha.txt'),
+      name: 'alpha.txt',
+    });
+
+    const { window: saveWindow, document: saveDocument } = await loadDialogs([], userRoot);
+    const save = saveWindow.SystemDialogs.save({ suggestedName: 'account-home.txt' });
+    await settle(80);
+    expect(pathBar(saveDocument).value).toBe(tmpRoot);
+    confirmBtn(saveDocument).click();
+    await expect(save).resolves.toEqual({
+      path: nodePath.join(tmpRoot, 'account-home.txt'),
+      name: 'account-home.txt',
+    });
   });
 
   it('open() lists folders first (sorted), then files (sorted), with grid semantics', async () => {

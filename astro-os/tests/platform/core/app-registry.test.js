@@ -254,7 +254,10 @@ describe('AppRegistry (js/platform/core/app-registry.js)', () => {
     expect(mod.getApp('capability-test').permissions).toEqual(['fs:access', 'system:app-launch', 'apps:communicate']);
   });
 
-  it('preserves root permission declarations from new and restored package manifests', () => {
+  it('preserves root permission declarations for System-signed packages, drops them for unverified restores', () => {
+    // 2026-11-12 audit (finding M1): the persisted manifest is
+    // package-controlled data, so its system:root declaration is only
+    // authoritative for records that carry the System signer triple.
     vi.resetModules();
     const mod = require('../../../js/platform/core/app-registry.js');
     mod.registerApp({
@@ -265,18 +268,38 @@ describe('AppRegistry (js/platform/core/app-registry.js)', () => {
     });
     expect(mod.getApp('root-package').permissions).toContain('system:root');
 
+    // A System-signed record keeps its root declaration across a restore.
     resetTestStorage();
     localStorage.setItem('nova_registry_meta', JSON.stringify([{
-      id: 'restored-root-package',
-      name: 'Restored root package',
+      id: 'restored-system-root',
+      name: 'System root package',
       permissions: [],
-      manifest: { permissions: ['system:root'] },
+      manifest: { permissions: ['system:root'], system: true },
+      verified: true,
+      signer: 'Astro System',
       source: 'file',
     }]));
     vi.resetModules();
     const restored = require('../../../js/platform/core/app-registry.js');
     restored.initialize();
-    expect(restored.getApp('restored-root-package').permissions).toContain('system:root');
+    expect(restored.getApp('restored-system-root').permissions).toContain('system:root');
+    expect(restored.getApp('restored-system-root').system).toBe(true);
+
+    // An UNVERIFIED record must NOT get its manifest-asserted root class
+    // permission back for free — it re-consents through the dialog (with
+    // the UNVERIFIED PUBLISHER banner) at next launch instead.
+    resetTestStorage();
+    localStorage.setItem('nova_registry_meta', JSON.stringify([{
+      id: 'restored-unverified-root',
+      name: 'Unverified root package',
+      permissions: [],
+      manifest: { permissions: ['system:root'] },
+      source: 'file',
+    }]));
+    vi.resetModules();
+    const restored2 = require('../../../js/platform/core/app-registry.js');
+    restored2.initialize();
+    expect(restored2.getApp('restored-unverified-root').permissions).not.toContain('system:root');
   });
 
   it('unregisters an app and cleans up OS.apps', () => {

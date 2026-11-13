@@ -1,0 +1,26 @@
+config BR2_PACKAGE_LABWC
+        bool "labwc"
+        depends on BR2_USE_MMU # fork()
+        select BR2_PACKAGE_CAIRO
+        select BR2_PACKAGE_LIBGLIB2
+        select BR2_PACKAGE_LIBINPUT
+        select BR2_PACKAGE_LIBPNG
+        select BR2_PACKAGE_LIBXCB
+        select BR2_PACKAGE_LIBXKBCOMMON
+        select BR2_PACKAGE_LIBXML2
+        select BR2_PACKAGE_PANGO
+        select BR2_PACKAGE_PIXMAN
+        select BR2_PACKAGE_WAYLAND
+        select BR2_PACKAGE_WAYLAND_PROTOCOLS
+        select BR2_PACKAGE_WLROOTS
+        select BR2_PACKAGE_WLROOTS_XWAYLAND
+        select BR2_PACKAGE_XWAYLAND
+        select BR2_PACKAGE_XCB_UTIL_WM
+        help
+          Labwc is a wlroots-based window-stacking compositor for Wayland,
+          inspired by Openbox. AstroOS uses it as the kiosk compositor because,
+          unlike cage, it supports stacking surfaces and the layer-shell
+          protocol, letting the OS display system UI on top of the fullscreen
+          app window.
+
+          https://github.com/labwc/labwc

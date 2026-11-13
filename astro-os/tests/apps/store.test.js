@@ -108,9 +108,32 @@ describe("'Store' app (js/apps/store)", () => {
     expect(content.querySelector('.store-error')).toBeTruthy();
   });
 
+  it('falls back to the raw GitHub catalog when the Pages host cannot be resolved', async () => {
+    const calls = [];
+    const loaded = await loadWindowApp('store', {
+      stubs: {
+        fetch: async (url) => {
+          const value = String(url);
+          calls.push(value);
+          if (value.includes('apps.json')) {
+            if (value.includes('novabyteteam.github.io')) throw new TypeError('Failed to fetch');
+            return { ok: true, status: 200, json: async () => CATALOG };
+          }
+          return { ok: false, status: 500, json: async () => ({}) };
+        },
+        extra: { Notify: makeNotify() },
+      },
+    });
+    const content = initApp(loaded.app, { window: loaded.window, state: {} });
+    await settle(50);
+
+    expect(cardOf(content, 'com.example.notes')).toBeTruthy();
+    expect(calls).toContain('https://raw.githubusercontent.com/AstroOSTeam/novabyte-os/main/src/apps.json');
+  });
+
   it('renders the browse view: category bar, featured hero and app cards', async () => {
     const { content } = await loadStore();
-    expect(content.querySelector('.store-title').textContent).toBe('NovaByte');
+    expect(content.querySelector('.store-title').textContent).toBe('AstroOS');
     expect(content.querySelector('.store-brand-subtitle').textContent).toBe('Store');
     // Category bar: Explore + sorted catalog categories with counts.
     const bar = content.querySelector('.category-bar');

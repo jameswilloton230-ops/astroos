@@ -168,7 +168,18 @@ const AppRegistry = (() => {
       if (!raw) return;
       const apps = JSON.parse(raw);
       for (const app of apps) {
-        if (app.manifest?.permissions?.includes('system:root')
+        // SECURITY (2026-11-12 audit, finding M1): the persisted MANIFEST is
+        // package-controlled data, so re-asserting its root-class permission
+        // at restore is only legitimate for records that satisfy the System
+        // signer triple below. For anything else the permission is dropped
+        // — an unverified package that legitimately needs root (dev-mode
+        // workflow) re-requests it through the consent dialog at next
+        // launch, where the UNVERIFIED PUBLISHER banner is shown.
+        const restoredSystemForRoot = app.verified === true &&
+          app.signer === 'Astro System' &&
+          app.manifest?.system === true;
+        if (restoredSystemForRoot
+          && app.manifest?.permissions?.includes('system:root')
           && !app.permissions?.includes('system:root')) {
           app.permissions = [...(Array.isArray(app.permissions) ? app.permissions : []), 'system:root'];
         }
@@ -412,6 +423,25 @@ const AppRegistry = (() => {
       appConfig.signer === 'Astro System' &&
       appConfig.manifest?.system === true;
 
+    // SECURITY (2026-11-12 audit, finding F2): 'system-bundle' is a
+    // provenance claim reserved for boot.reconcileBundledNovaApps() and
+    // the system-service loader — both of which install System-signed
+    // manifest.system packages. A record claiming that source without the
+    // System signer triple is lying about its provenance (the App Manager
+    // replace flow used to inherit it from the install being replaced),
+    // and the UnrestrictedGate's host-execution path trusts exactly this
+    // value — so downgrade the claim to plain 'file' here and keep the
+    // stored record honest.
+    if (claimedSource === 'system-bundle' && !isSystemSigned) {
+      console.warn('[AppRegistry] Downgrading unprovenanced system-bundle claim for', appConfig.id);
+      if (typeof EventLog !== 'undefined') {
+        EventLog.log({ app: 'AppRegistry', category: 'security', severity: 'warn', message: `Downgraded unprovenanced system-bundle source claim for ${appConfig.id}`, data: { appId: appConfig.id } });
+      }
+    }
+    const normalizedSource = claimedSource === 'system-bundle' && !isSystemSigned
+      ? 'file'
+      : claimedSource;
+
     const app = {
       icon: '/assets/no_app_icon.svg', description: '', version: '1.0.0', author: 'Unknown',
       type: 'webapp', entry: 'index.html', permissions: [], optionalPermissions: [],
@@ -425,6 +455,7 @@ const AppRegistry = (() => {
       handles: appConfig.handles ?? appConfig.manifest?.handles ?? undefined,
       autoGrant: isBuiltinSource ? (appConfig.autoGrant || false) : false,
       system: isSystemSigned,
+      source: normalizedSource,
     };
 
     if (typeof OS !== 'undefined' && OS?.apps) {

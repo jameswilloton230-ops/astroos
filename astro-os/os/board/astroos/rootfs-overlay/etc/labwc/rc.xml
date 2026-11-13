@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AstroOS kiosk labwc configuration — full compositor lockdown.
+
+  labwc replaced cage as the kiosk compositor: it is a full stacking
+  compositor with layer-shell support, so the OS can show system surfaces
+  on top of the fullscreen AstroOS window, and auxiliary X11 clients
+  (DevTools, diagnostics) stack correctly instead of needing cage-specific
+  restacking patches.
+
+  The lockdown rule is the one the kiosk has always had under cage: NOTHING
+  is bound at the compositor level. Every shortcut is handled inside the
+  AstroOS app window, never by the compositor:
+
+  * No default keybinds are loaded, and no custom keybinds exist: no
+    A-Tab / A-S-Tab focus cycling, no A-F4 close, no A-Space window menu,
+    no compositor-owned shortcut of any kind. (Omitting <default/> inside
+    <keyboard> means labwc loads exactly the zero bindings defined here.)
+  * The fullscreen AstroOS window additionally refuses WM close requests
+    in scripts/startup.js (ASTROOS_KIOSK=1), so Alt+F4 can never exit the
+    kiosk app; with no A-F4 binding here it is not even a compositor
+    action anymore — it reaches the app, which already swallows it.
+  * PrintScreen is intentionally NOT bound here. The OS handles it in-page
+    (ui-init.js -> ScreenshotService) so screenshots keep working while
+    every other browser-level shortcut is disabled.
+
+  Mouse behaviour keeps labwc's defaults: pointer events must reach the
+  fullscreen app exactly like they did under cage, and with a single
+  fullscreen window there is nothing to move, resize or switch to.
+-->
+<labwc_config>
+
+  <keyboard>
+    <!-- Deliberately NO <default/> and NO <keybind/> entries: the kiosk owns
+         every shortcut inside the app window. Adding any binding here is a
+         lockdown regression (test-labwc-kiosk.mjs pins this). -->
+  </keyboard>
+
+  <mouse>
+    <default />
+  </mouse>
+
+  <!-- The NW.js kiosk is assigned the com.novabyte.os X11 window class by
+       prepare-kiosk.mjs. Restrict decoration and maximize behavior to that
+       identifier so auxiliary and unrelated windows keep their decorations. -->
+  <windowRules>
+    <windowRule identifier="com.novabyte.os" serverDecoration="no" />
+    <windowRule identifier="com.novabyte.os" type="normal">
+      <action name="Maximize" />
+    </windowRule>
+  </windowRules>
+
+</labwc_config>
