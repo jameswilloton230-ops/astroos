@@ -3373,7 +3373,7 @@ registerApp({
       swRows.appendChild(mkRow('Operating System', linuxInfo.distribution, false));
       swRows.appendChild(mkRow('Linux Kernel', linuxInfo.kernel, false));
       swRows.appendChild(mkRow('Architecture', linuxInfo.architecture, false));
-      swRows.appendChild(mkRow('Build Date', '2026-11-13'));
+      swRows.appendChild(mkRow('Build Date',  '2026-11-13'));
 
       // Security patch row — level comes from the platform when it knows it
       const patchRow = createEl('div', { style: 'display:flex;justify-content:space-between;align-items:center;padding:11px 0;font-size:12.5px;' });
