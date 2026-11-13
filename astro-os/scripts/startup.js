@@ -16,7 +16,7 @@ let win = null;
 function createServerEnv(nodeBin = process.env.NODE_BIN_PATH || 'node') {
   // Share an unguessable, per-launch credential with the host renderer and
   // server child so verified system-app API calls can authenticate.
-  process.env.ASTROOS_SYSTEM_API_RATE_LIMIT_SECRET = crypto.randomBytes(32).toString('hex');
+  process.env.NBOSP_SYSTEM_API_RATE_LIMIT_SECRET = crypto.randomBytes(32).toString('hex');
 
   const rawHeap = process.env.SERVER_HEAP_MB;
   // Sanitize heap flag to prevent flag injection vulnerabilities
@@ -30,10 +30,22 @@ function createServerEnv(nodeBin = process.env.NODE_BIN_PATH || 'node') {
   return serverEnv;
 }
 
+function getMainWindowOptions(kiosk = process.env.NBOSP_KIOSK === '1') {
+  return {
+    title: 'NovaByte',
+    width: 1280,
+    height: 720,
+    frame: !kiosk,
+    fullscreen: kiosk,
+    kiosk,
+    resizable: !kiosk,
+  };
+}
+
 /**
  * Full application startup sequence.
  *
- * @param {string} appDir Absolute path to the AstroOS directory
+ * @param {string} appDir Absolute path to the NBOSP directory
  */
 async function bootstrap(appDir) {
   // Parallel initialization of environment and SSL certificates
@@ -54,13 +66,13 @@ async function bootstrap(appDir) {
 
   // Validate port input to avoid NaN or invalid range URLs
   const rawPort = parseInt(process.env.PORT, 10);
-  const port = Number.isInteger(rawPort) && rawPort > 0 && rawPort <= 65535 ? rawPort : 3006;
+  const port = Number.isInteger(rawPort) && rawPort > 0 && rawPort <= 65535 ? rawPort : 3003;
   const appUrl = `https://localhost:${port}`;
 
   // Global rejection safety net with full stack trace observability
   process.on('unhandledRejection', (reason) => {
     const detail = Error.isError(reason) ? (reason.stack || reason.message) : String(reason);
-    console.error('[AstroOS] Unhandled rejection:', detail);
+    console.error('[NovaByte] Unhandled rejection:', detail);
   });
 
   // Server spawn setup
@@ -95,19 +107,19 @@ async function bootstrap(appDir) {
       fallbackTimer = null;
     }
 
-    nw.Window.open(appUrl, { title: 'AstroOS', width: 1280, height: 720 }, (createdWindow) => {
+    nw.Window.open(appUrl, getMainWindowOptions(), (createdWindow) => {
       if (!createdWindow) return;
       win = createdWindow;
 
       win.on('close', function () {
         // In the kiosk image, Alt+F4 / any WM close request aimed at the
-        // AstroOS app itself is ignored: the OS exposes its own close and
+        // NovaByte app itself is ignored: the OS exposes its own close and
         // shutdown flows. Only auxiliary windows (DevTools and other X11
         // clients) are closable by the window manager. A programmatic exit
-        // can still force this by setting win.__astroosForceClose = true
+        // can still force this by setting win.__nbospForceClose = true
         // before calling win.close().
-        if (process.env.ASTROOS_KIOSK === '1' && !this.__astroosForceClose) {
-          console.warn('[AstroOS] Kiosk close request ignored (Alt+F4 is disabled for the AstroOS app).');
+        if (process.env.NBOSP_KIOSK === '1' && !this.__nbospForceClose) {
+          console.warn('[NovaByte] Kiosk close request ignored (Alt+F4 is disabled for the NovaByte app).');
           return; // not calling close(true) cancels the close
         }
         if (server && !server.killed) {
@@ -120,7 +132,7 @@ async function bootstrap(appDir) {
   }
 
   server.on('error', (err) => {
-    tee(`[AstroOS] Server spawn error: ${err.message}\n`, true);
+    tee(`[NovaByte] Server spawn error: ${err.message}\n`, true);
   });
 
   server.on('exit', (code, signal) => {
@@ -130,7 +142,7 @@ async function bootstrap(appDir) {
       fallbackTimer = null;
     }
 
-    tee(`[AstroOS] Server exited (code=${code}, signal=${signal})\n`, false);
+    tee(`[NovaByte] Server exited (code=${code}, signal=${signal})\n`, false);
     logStream.end();
     if (conout) {
       try { conout.end(); } catch (_) {}
@@ -174,7 +186,7 @@ async function bootstrap(appDir) {
   // No global (system-wide) hotkeys are registered on purpose: every OS
   // shortcut lives strictly inside the app (see js/apps/system-events/service.js
   // and ui-init.js). F11 fullscreen and F12 devtools are handled in-page, so
-  // nothing fires when the AstroOS window is unfocused.
+  // nothing fires when the NovaByte window is unfocused.
 }
 
-module.exports = { bootstrap, createServerEnv };
+module.exports = { bootstrap, createServerEnv, getMainWindowOptions };
