@@ -596,8 +596,8 @@ registerApp({
           'aria-label': s.name,
           'aria-current': currentSection === s.id ? 'true' : 'false'
         });
-        const iconSpan = createEl('span', { 'aria-hidden': 'true' });
-        iconSpan.innerHTML = svgIcon(s.icon, 16);
+        const iconSpan = createEl('span', { 'aria-hidden': 'true', style: 'display:flex;align-items:center;' });
+        iconSpan.innerHTML = svgIcon(s.icon, 20);
         btn.append(iconSpan, createEl('span', { textContent: s.name }));
         btn.addEventListener('click', () => {
           currentSection = s.id;
